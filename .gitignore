@@ -1,0 +1,40 @@
+# Dependencies
+node_modules/
+
+# Vite
+dist/
+.vite/
+
+# PWA (vite-plugin-pwa / Workbox — 빌드·dev 시 자동 생성)
+dev-dist/
+sw.js
+sw.js.map
+sw.*.js
+workbox-*.js
+registerSW.js
+manifest.webmanifest
+
+# TypeScript
+*.tsbuildinfo
+
+# Environment
+.env
+.env.*
+!.env.example
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+
+# Editor / OS
+.vscode/*
+!.vscode/extensions.json
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# Test / coverage
+coverage/
