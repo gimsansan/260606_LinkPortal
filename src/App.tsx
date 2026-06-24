@@ -58,7 +58,9 @@ export function App() {
   const { links, refresh: refreshLinks } = useLinks(activeCategoryId);
 
   const [modal, setModal] = useState<ModalState>(null);
-  const [addCategoryParentId, setAddCategoryParentId] = useState<string | null>(null);
+  const [addCategoryParentId, setAddCategoryParentId] = useState<string | null | undefined>(
+    undefined,
+  );
 
   useEffect(() => {
     seedIfEmpty().then(() => setReady(true));
@@ -111,7 +113,7 @@ export function App() {
   };
 
   const handleAddCategory = async (title: string) => {
-    const parentId = addCategoryParentId ?? currentParentId;
+    const parentId = addCategoryParentId !== undefined ? addCategoryParentId : currentParentId;
     const cat = await createCategory(parentId, title);
     await refreshAll();
 
@@ -126,11 +128,17 @@ export function App() {
     } else if (parentId === currentParentId) {
       setNavStack((s) => [...s, cat.id]);
     }
+    setAddCategoryParentId(undefined);
   };
 
-  const openAddCategory = (parentId: string | null = currentParentId) => {
+  const openAddCategory = (parentId?: string | null) => {
     setAddCategoryParentId(parentId);
     setModal({ type: 'add-category' });
+  };
+
+  const closeAddCategoryModal = () => {
+    setModal(null);
+    setAddCategoryParentId(undefined);
   };
 
   const addLinkToCategory = async (
@@ -332,7 +340,7 @@ export function App() {
           placeholder="카테고리 이름"
           submitLabel="추가"
           onSubmit={handleAddCategory}
-          onClose={() => setModal(null)}
+          onClose={closeAddCategoryModal}
         />
       )}
       {modal?.type === 'edit-category' && (
