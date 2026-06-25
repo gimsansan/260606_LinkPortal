@@ -758,6 +758,26 @@ button {
   align-items: center;
   justify-content: center;
   min-height: 200px;
+  font-size: 1.2rem;
+  padding: 2rem;
+}
+
+/* 데스크톱: 좌측 카테고리 사이드바(260px)만큼 우측으로 쏠려 보이므로
+   콘텐츠 폭 기준 %로 왼쪽으로 당겨 창 중앙 근처에 배치 */
+@media (min-width: 768px) {
+  .app-main .empty-state--droppable,
+  .link-list .empty-state {
+    transform: translateX(-15%);
+  }
+}
+
+/* 링크 빈 상태도 안내 문구처럼 영역 중앙에 크게 배치 */
+.link-list .empty-state {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 60vh;
+  font-size: 1.2rem;
 }
 
 @media (max-width: 767px) {
@@ -770,3 +790,4 @@ button {
     --center-size: 96px;
   }
 }
+

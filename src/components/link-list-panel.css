@@ -1,0 +1,112 @@
+/* ── 링크 리스트 패널 (외곽 프레임) ── */
+.link-list__panel {
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.03);
+  overflow: hidden;
+}
+
+/* ── 툴바: 정렬 + 개수 ── */
+.link-list__toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.5rem 0.75rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.link-list__count {
+  font-size: 0.8rem;
+  color: rgba(255, 255, 255, 0.45);
+}
+
+.link-list__sort {
+  display: flex;
+  gap: 2px;
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 6px;
+  padding: 2px;
+}
+
+.link-list__sort-btn {
+  padding: 4px 10px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 0.75rem;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.link-list__sort-btn:hover {
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.link-list__sort-btn--active {
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+}
+
+/* ── 그리드 (패널 안) ── */
+.link-list__panel .link-list__grid {
+  padding: 0.75rem;
+}
+
+/* ── 페이지네이션 ── */
+.link-list__pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.6rem 0.75rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.link-list__page-btn {
+  padding: 4px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 4px;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 0.8rem;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.link-list__page-btn:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+}
+
+.link-list__page-btn:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+
+.link-list__page-numbers {
+  display: flex;
+  gap: 2px;
+}
+
+.link-list__page-num {
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 0.8rem;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.link-list__page-num:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.link-list__page-num--active {
+  background: rgba(255, 255, 255, 0.15);
+  color: #fff;
+}

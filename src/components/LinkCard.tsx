@@ -1,23 +1,60 @@
 import type { LinkItem } from '../types';
-import { launchUrl } from '../services/url';
+import { launchUrl, extractYouTubeVideoId } from '../services/url';
 
 interface LinkCardProps {
   link: LinkItem;
   onDelete?: (id: string) => void;
   onEdit?: (link: LinkItem) => void;
   onMove?: (link: LinkItem) => void;
+  onPlay?: (link: LinkItem) => void;
+  onDragStart?: (link: LinkItem) => void;
+  onDragEnd?: () => void;
 }
 
-export function LinkCard({ link, onDelete, onEdit, onMove }: LinkCardProps) {
+export function LinkCard({
+  link,
+  onDelete,
+  onEdit,
+  onMove,
+  onPlay,
+  onDragStart,
+  onDragEnd,
+}: LinkCardProps) {
   const isAuto = link.source === 'auto';
+  const isYouTube = !!extractYouTubeVideoId(link.url);
+
+  const handleClick = () => {
+    if (isYouTube && onPlay) {
+      onPlay(link);
+    } else {
+      launchUrl(link.url);
+    }
+  };
+
+  const handleDragStart = (e: React.DragEvent) => {
+    e.dataTransfer.setData('application/linkportal-link', JSON.stringify({
+      id: link.id,
+      title: link.title,
+      categoryId: link.categoryId,
+    }));
+    e.dataTransfer.effectAllowed = 'move';
+    onDragStart?.(link);
+  };
+
+  const handleDragEnd = () => {
+    onDragEnd?.();
+  };
 
   return (
     <article
       className={`link-card ${isAuto ? 'link-card--auto' : 'link-card--manual'}`}
-      onClick={() => launchUrl(link.url)}
+      onClick={handleClick}
       role="button"
       tabIndex={0}
-      onKeyDown={(e) => e.key === 'Enter' && launchUrl(link.url)}
+      draggable
+      onDragStart={handleDragStart}
+      onDragEnd={handleDragEnd}
+      onKeyDown={(e) => e.key === 'Enter' && handleClick()}
     >
       <div className="link-card__visual">
         {isAuto && link.imageUrl ? (
@@ -31,7 +68,7 @@ export function LinkCard({ link, onDelete, onEdit, onMove }: LinkCardProps) {
             )}
           </div>
         )}
-        {!isAuto && <span className="link-card__badge">수제</span>}
+        {isYouTube && <span className="link-card__play-icon">▶</span>}
       </div>
       <h3 className="link-card__title">{link.title}</h3>
       {onMove && (
@@ -42,7 +79,7 @@ export function LinkCard({ link, onDelete, onEdit, onMove }: LinkCardProps) {
             e.stopPropagation();
             onMove(link);
           }}
-          aria-label="카테고리로 이동"
+          aria-label="폴더로 이동"
         >
           ↗
         </button>

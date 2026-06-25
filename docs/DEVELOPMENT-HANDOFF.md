@@ -2,6 +2,8 @@
 
 > URL 바로가기(.url) 컬렉션 PWA. 원본 기획은 `project-skeleton.md`(외부 인계 문서)를 참고.
 > 이 문서는 **현재 코드베이스까지의 구현 과정·결정·미완 항목**을 개발자에게 넘기기 위한 기록이다.
+>
+> **용어 메모:** 내부 코드·DB는 여전히 `category`(카테고리)지만, **UI 표시 텍스트는 "폴더"** 로 통일됨. 이 문서는 코드 기준으로 `카테고리`를 사용한다.
 
 ---
 
@@ -9,10 +11,10 @@
 
 | 원칙 | 구현 |
 |------|------|
-| **재생이 아닌 접속** | 미디어 추출 없음. `launchUrl()` → `window.open` |
+| **재생이 아닌 접속** | 미디어 추출 없음. `launchUrl()` → `window.open` (단, **YouTube는 인앱 오버레이 재생** — §3 Phase 7) |
 | **인증은 대상 사이트에 위임** | iframe 로그인·자격증명 저장 없음 |
 | **로컬 PWA** | IndexedDB(Dexie), 기기별 데이터 |
-| **구조 커스터마이징** | 카테고리 트리 생성·이름변경·이동·삭제, 링크 편집·이동 |
+| **구조 커스터마이징** | 카테고리 트리 생성·이름변경·이동·삭제, 링크 편집·이동(버튼 + **드래그앤드롭**) |
 | **외형 커스터마이징** | 현재 범위 밖 (앱 기본 다크 테마) |
 
 ---
@@ -22,7 +24,9 @@
 - **React 19** + **TypeScript** + **Vite 6**
 - **Dexie 4** (IndexedDB)
 - **vite-plugin-pwa** (manifest, service worker)
-- 스타일: 단일 `src/styles/global.css` (CSS 변수, BEM 유사 클래스)
+- **react-youtube** (YouTube IFrame 인앱 플레이어)
+- 스타일: 기본 `src/styles/global.css`(CSS 변수, BEM 유사) + 기능별 컴포넌트 CSS
+  (`components/YouTubePlayer.css`, `components/link-list-panel.css`, `components/drag-interactions.css`)
 
 ```bash
 npm install
@@ -57,7 +61,7 @@ PWA 아이콘 재생성: `scripts/generate-pwa-icons.ps1` → `public/pwa-192.pn
 
 - **YouTube**: oEmbed + `hqdefault.jpg` 썸네일
 - **일반 URL**: OG 태그 직접 fetch 시도 → CORS 실패 시 hostname + favicon fallback (**의도된 동작**)
-- **auto 카드**: `imageUrl` 있음 / **manual 카드**: 파비콘·수제 배지·점선 테두리
+- **auto 카드**: `imageUrl` 있음 / **manual 카드**: 파비콘·점선 테두리 (※ "수제/직접 추가" 텍스트 배지는 이후 제거됨 — §3 Phase 10)
 - **열기 모델**: `src/services/url.ts` — `launchUrl`, `getFaviconUrl`, YouTube ID 추출
 
 ### Phase 3 — 드래그 임포트 (.url)
@@ -86,6 +90,33 @@ PWA 아이콘 재생성: `scripts/generate-pwa-icons.ps1` → `public/pwa-192.pn
 
 - 트리 행 액션 아이콘(✎ ↗ + ×) 크기 32px
 
+### Phase 7 — YouTube 인앱 재생
+
+- `react-youtube` 추가 (**의존성 변경 → rebuild 필요했음**)
+- `components/YouTubePlayer.tsx` + `YouTubePlayer.css` — 오버레이 모달 플레이어
+- 동작: YouTube 링크 카드 클릭 → 새 탭 대신 인앱 재생. **종료 시 "다음 영상"**(같은 폴더의 YouTube 링크 순서), **재생 실패(비공개/연령제한) 시 새 탭 fallback**
+- `App.tsx`: `playingLink` 상태 + `youtubePlaylist`(현재 폴더 YouTube 링크 필터) + `handlePlayVideo`
+- 비-YouTube 링크는 기존대로 `launchUrl` (접속 모델 유지)
+
+### Phase 8 — 링크 드래그앤드롭
+
+- 카드 `draggable`, dataTransfer 타입 **`application/linkportal-link`** (`LinkCard.tsx`)
+- **폴더로 이동**: 트리 노드에 드롭 → `TreeView` `onLinkDrop` → `App.handleTreeLinkDrop` → `moveLink()`
+- **삭제(휴지통)**: 드래그 중 표시되는 `components/DragTrashZone.tsx`에 드롭 → `handleTrashDrop` → `deleteLink()`
+- `App.tsx`: `draggingLink` 상태로 휴지통 표시 토글, `drag-interactions.css`
+
+### Phase 9 — 링크 목록 정렬·페이지네이션
+
+- `LinkCardList.tsx`: 정렬 **최신순/오래된순/이름순**(`SortKey`), 페이지당 **12개**(`PAGE_SIZE`), 항목 수 표시
+- `link-list-panel.css` 분리
+
+### Phase 10 — UI 문구·용어 정리
+
+- 표시 용어 **"카테고리" → "폴더"** 통일 (코드 식별자는 유지)
+- 링크 카드의 **"수제"/"직접 추가" 텍스트 배지 제거** (manual은 파비콘·점선 테두리로만 구분)
+- 빈 화면/빈 목록 안내 문구 친화적으로 변경 + 영역 중앙 배치(CSS)
+- **인스턴스(브라우저) 별명 기능**: localStorage 기반으로 추가했다가 **이후 전량 제거** (관련 코드·CSS 삭제 완료)
+
 ---
 
 ## 4. 디렉터리·파일 맵
@@ -106,13 +137,17 @@ src/
     useLinks.ts
     useMediaQuery.ts      # useIsDesktop @ 768px
   components/
-    TreeView.tsx          # 웹 트리 + 행 액션
-    LinkCardList.tsx      # 링크 그리드 + 드롭존
-    LinkCard.tsx          # auto/manual 카드, ✎ × ↗
-    LinkDropZone.tsx      # 드래그 오버레이
+    TreeView.tsx          # 웹 트리 + 행 액션 + 링크 드롭 타겟(폴더 이동)
+    LinkCardList.tsx      # 링크 그리드 + 정렬·페이지네이션 + 드롭존
+    LinkCard.tsx          # auto/manual 카드, ✎ × ↗, draggable
+    LinkDropZone.tsx      # .url/URL 드래그 임포트 오버레이
     EmptyDropPanel.tsx    # 메인 빈 화면 드롭
     RadialBubbleView.tsx  # 모바일 방사형
+    YouTubePlayer.tsx     # YouTube 인앱 오버레이 플레이어 (+ .css)
+    DragTrashZone.tsx     # 카드 드래그 중 표시되는 삭제 휴지통
     InputModal.tsx        # 추가/편집/이동/확인 모달 일체
+    link-list-panel.css   # 링크 목록 패널(정렬·페이지) 스타일
+    drag-interactions.css # 드래그앤드롭 시각 피드백
   styles/global.css
 public/
   favicon.svg, pwa-192.png, pwa-512.png
@@ -120,7 +155,7 @@ scripts/
   generate-pwa-icons.ps1
 ```
 
-**인계 시 우선 읽을 파일:** `App.tsx` → `db/index.ts` → `dropImport.ts` / `metadata.ts` → `TreeView.tsx` / `LinkCardList.tsx`
+**인계 시 우선 읽을 파일:** `App.tsx` → `db/index.ts` → `dropImport.ts` / `metadata.ts` → `TreeView.tsx` / `LinkCardList.tsx` / `YouTubePlayer.tsx`
 
 ---
 
@@ -176,8 +211,10 @@ id, categoryId, url, title, imageUrl?, faviconUrl?, source: 'auto' | 'manual', c
 
 ### 링크 카드
 
-- 클릭: `launchUrl`
-- **✎** 편집 · **×** 삭제(확인 없음) · **↗** 다른 카테고리로 이동
+- 클릭: YouTube → **인앱 재생**(`YouTubePlayer`), 그 외 → `launchUrl`
+- **✎** 편집 · **×** 삭제(확인 없음) · **↗** 다른 카테고리로 이동(모달)
+- **드래그앤드롭**: 트리 폴더에 드롭 → 이동 / 휴지통(`DragTrashZone`)에 드롭 → 삭제
+- 목록: **정렬**(최신/오래된/이름순) · **페이지네이션**(12개/페이지)
 
 ---
 
@@ -244,12 +281,14 @@ id, categoryId, url, title, imageUrl?, faviconUrl?, source: 'auto' | 'manual', c
 
 ## 11. 다음 작업 후보 (개발자 참고)
 
-1. 링크 삭제 확인 모달 (카테고리만 있음)
-2. 모바일 트리/카테고리 편집 parity
+1. 링크 삭제 확인 모달 (현재 즉시 삭제 / 휴지통 드롭만 있음)
+2. 모바일 트리/카테고리 편집 parity (드래그앤드롭은 데스크톱 중심)
 3. 방사형 버블 수 제한 + drill-down 정책
 4. 링크 편집 시 URL 변경 → 메타 재수집 옵션
 5. OG 프록시 (별도 서비스 설계 후)
 6. `App.tsx` 훅/모듈 분리 (기능 안정 후)
+
+> **완료된 이전 후보:** YouTube 인앱 재생, 링크 드래그앤드롭(이동·삭제), 목록 정렬·페이지네이션
 
 ---
 

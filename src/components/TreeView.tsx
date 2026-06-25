@@ -1,6 +1,12 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type DragEvent } from 'react';
 import type { Category } from '../types';
 import { LinkDropZone } from './LinkDropZone';
+
+const LINK_DRAG_TYPE = 'application/linkportal-link';
+
+function isLinkDrag(e: DragEvent): boolean {
+  return e.dataTransfer.types.includes(LINK_DRAG_TYPE);
+}
 
 interface DropLinkItem {
   url: string;
@@ -93,7 +99,7 @@ function TreeNodeMenu({ isOpen, onOpenChange, onMove, onAddChild, onDelete }: Tr
             onClick={() => run(onAddChild)}
           >
             <span className="tree-node__menu-emoji" aria-hidden="true">🆕</span>
-            <span className="tree-node__menu-label">하위 카테고리 추가</span>
+            <span className="tree-node__menu-label">하위 폴더 추가</span>
           </button>
           <div className="tree-node__menu-divider" role="separator" />
           <button
@@ -124,6 +130,7 @@ interface TreeNodeProps {
   onRename: (id: string, title: string) => void;
   onMove: (id: string) => void;
   onDelete: (id: string) => void;
+  onLinkDrop?: (categoryId: string, data: string) => void;
 }
 
 function TreeNode({
@@ -139,6 +146,7 @@ function TreeNode({
   onRename,
   onMove,
   onDelete,
+  onLinkDrop,
 }: TreeNodeProps) {
   const children = allCategories
     .filter((c) => c.parentId === category.id)
@@ -147,13 +155,40 @@ function TreeNode({
   const isSelected = selectedId === category.id;
   const isMenuOpen = openMenuId === category.id;
   const [expanded, setExpanded] = useState(true);
+  const [isDropTarget, setIsDropTarget] = useState(false);
+
+  const handleDragOver = (e: DragEvent) => {
+    if (!onLinkDrop || !isLinkDrag(e)) return;
+    e.preventDefault();
+    e.stopPropagation();
+    e.dataTransfer.dropEffect = 'move';
+    setIsDropTarget(true);
+  };
+
+  const handleDragLeave = (e: DragEvent) => {
+    if (!onLinkDrop) return;
+    if (e.currentTarget.contains(e.relatedTarget as Node)) return;
+    setIsDropTarget(false);
+  };
+
+  const handleDrop = (e: DragEvent) => {
+    if (!onLinkDrop || !isLinkDrag(e)) return;
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDropTarget(false);
+    const data = e.dataTransfer.getData(LINK_DRAG_TYPE);
+    if (data) onLinkDrop(category.id, data);
+  };
 
   return (
     <li
       className={`tree-node${isNested ? ' tree-node--nested' : ''}${isLastChild ? ' tree-node--last' : ''}`}
     >
       <div
-        className={`tree-node__row ${isSelected ? 'tree-node__row--selected' : ''}`}
+        className={`tree-node__row ${isSelected ? 'tree-node__row--selected' : ''}${isDropTarget ? ' tree-node--drop-target' : ''}`}
+        onDragOver={handleDragOver}
+        onDragLeave={handleDragLeave}
+        onDrop={handleDrop}
       >
         <button
           type="button"
@@ -206,6 +241,7 @@ function TreeNode({
               onRename={onRename}
               onMove={onMove}
               onDelete={onDelete}
+              onLinkDrop={onLinkDrop}
             />
           ))}
         </ul>
@@ -224,6 +260,7 @@ interface TreeViewProps {
   onMove: (id: string) => void;
   onDelete: (id: string) => void;
   onDropImport?: (items: DropLinkItem[]) => void | Promise<void>;
+  onLinkDrop?: (categoryId: string, data: string) => void;
 }
 
 export function TreeView({
@@ -236,6 +273,7 @@ export function TreeView({
   onMove,
   onDelete,
   onDropImport,
+  onLinkDrop,
 }: TreeViewProps) {
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
 
@@ -246,7 +284,7 @@ export function TreeView({
   const aside = (
     <aside className="tree-view">
       <header className="tree-view__header">
-        <h2 className="tree-view__title">카테고리</h2>
+        <h2 className="tree-view__title">폴더</h2>
         <button type="button" className="btn-icon" onClick={onAddRoot} aria-label="루트 추가">
           +
         </button>
@@ -265,6 +303,7 @@ export function TreeView({
             onRename={onRename}
             onMove={onMove}
             onDelete={onDelete}
+            onLinkDrop={onLinkDrop}
           />
         ))}
       </ul>

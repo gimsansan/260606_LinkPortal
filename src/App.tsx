@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import type { LinkItem } from './types';
 import {
   seedIfEmpty,
@@ -18,11 +18,13 @@ import { useCategories } from './hooks/useCategories';
 import { useLinks } from './hooks/useLinks';
 import { useIsDesktop } from './hooks/useMediaQuery';
 import { fetchLinkMetadata } from './services/metadata';
-import { isValidUrl, getFaviconUrl } from './services/url';
+import { isValidUrl, getFaviconUrl, extractYouTubeVideoId } from './services/url';
 import { RadialBubbleView } from './components/RadialBubbleView';
 import { TreeView } from './components/TreeView';
 import { LinkCardList } from './components/LinkCardList';
 import { EmptyDropPanel } from './components/EmptyDropPanel';
+import { YouTubePlayer } from './components/YouTubePlayer';
+import { DragTrashZone } from './components/DragTrashZone';
 import {
   InputModal,
   AddLinkModal,
@@ -62,6 +64,15 @@ export function App() {
     undefined,
   );
 
+  const [playingLink, setPlayingLink] = useState<LinkItem | null>(null);
+
+  const [draggingLink, setDraggingLink] = useState<LinkItem | null>(null);
+
+  const youtubePlaylist = useMemo(
+    () => links.filter((l) => !!extractYouTubeVideoId(l.url)),
+    [links],
+  );
+
   useEffect(() => {
     seedIfEmpty().then(() => setReady(true));
   }, []);
@@ -79,7 +90,7 @@ export function App() {
     if (ready) refreshAll();
   }, [ready, currentParentId, refreshAll]);
 
-  const centerTitle = current?.title ?? (navStack.length === 0 ? '카테고리' : 'Topic');
+  const centerTitle = current?.title ?? (navStack.length === 0 ? '폴더' : 'Topic');
 
   const selectCategoryById = async (id: string) => {
     const path: string[] = [];
@@ -253,6 +264,42 @@ export function App() {
     await selectCategoryById(id);
   };
 
+  const handlePlayVideo = useCallback((link: LinkItem) => {
+    setPlayingLink(link);
+  }, []);
+
+  const handleClosePlayer = useCallback(() => {
+    setPlayingLink(null);
+  }, []);
+
+  const handleCardDragStart = useCallback((link: LinkItem) => {
+    setDraggingLink(link);
+  }, []);
+
+  const handleCardDragEnd = useCallback(() => {
+    setDraggingLink(null);
+  }, []);
+
+  const handleTrashDrop = useCallback(async () => {
+    if (!draggingLink) return;
+    await deleteLink(draggingLink.id);
+    setDraggingLink(null);
+    await refreshAll();
+  }, [draggingLink, refreshAll]);
+
+  const handleTreeLinkDrop = useCallback(async (categoryId: string, data: string) => {
+    try {
+      const parsed = JSON.parse(data);
+      if (parsed?.id) {
+        await moveLink(parsed.id, categoryId);
+        setDraggingLink(null);
+        await refreshAll();
+      }
+    } catch {
+      // linkportal-link 포맷이 아닌 경우 무시
+    }
+  }, [refreshAll]);
+
   if (!ready) {
     return <div className="app-loading">로딩 중…</div>;
   }
@@ -263,9 +310,8 @@ export function App() {
       : undefined;
 
   const emptyMainMessage =
-    '카테고리를 선택하거나 + 로 추가하세요. .url 파일을 여기에 놓으면 미분류에 등록됩니다.';
+    '왼쪽에서 폴더를 선택하거나, + 버튼으로 새로 만들어 보세요.';
 
-  // 웹(≥768px): TreeView + LinkCardList. 모바일: RadialBubbleView drill-down.
   return (
     <div className={`app ${isDesktop ? 'app--tree-layout' : ''}`}>
       {isDesktop && (
@@ -289,6 +335,7 @@ export function App() {
               if (cat) setModal({ type: 'confirm-delete-category', id, title: cat.title });
             }}
             onDropImport={handleDropImport}
+            onLinkDrop={handleTreeLinkDrop}
           />
         )}
 
@@ -302,6 +349,9 @@ export function App() {
                 onDeleteLink={handleDeleteLink}
                 onEditLink={(link) => setModal({ type: 'edit-link', link })}
                 onMoveLink={(link) => setModal({ type: 'move-link', link })}
+                onPlayVideo={handlePlayVideo}
+                onDragStart={handleCardDragStart}
+                onDragEnd={handleCardDragEnd}
                 onDropImport={handleDropImport}
               />
             ) : (
@@ -316,6 +366,9 @@ export function App() {
               onDeleteLink={handleDeleteLink}
               onEditLink={(link) => setModal({ type: 'edit-link', link })}
               onMoveLink={(link) => setModal({ type: 'move-link', link })}
+              onPlayVideo={handlePlayVideo}
+              onDragStart={handleCardDragStart}
+              onDragEnd={handleCardDragEnd}
               onDropImport={handleDropImport}
             />
           ) : (
@@ -334,10 +387,24 @@ export function App() {
         </main>
       </div>
 
+      <DragTrashZone
+        visible={!!draggingLink}
+        onDrop={handleTrashDrop}
+      />
+
+      {playingLink && (
+        <YouTubePlayer
+          link={playingLink}
+          playlist={youtubePlaylist}
+          onClose={handleClosePlayer}
+          onPlayLink={handlePlayVideo}
+        />
+      )}
+
       {modal?.type === 'add-category' && (
         <InputModal
-          title="카테고리 추가"
-          placeholder="카테고리 이름"
+          title="폴더 추가"
+          placeholder="폴더 이름"
           submitLabel="추가"
           onSubmit={handleAddCategory}
           onClose={closeAddCategoryModal}
@@ -345,8 +412,8 @@ export function App() {
       )}
       {modal?.type === 'edit-category' && (
         <InputModal
-          title="카테고리 이름 변경"
-          placeholder="카테고리 이름"
+          title="폴더 이름 변경"
+          placeholder="폴더 이름"
           submitLabel="저장"
           initialValue={modal.title}
           onSubmit={handleRenameCategory}
@@ -381,7 +448,7 @@ export function App() {
       )}
       {modal?.type === 'confirm-delete-category' && (
         <ConfirmModal
-          title="카테고리 삭제"
+          title="폴더 삭제"
           message={`"${modal.title}"와 하위 항목·링크가 모두 삭제됩니다.`}
           onConfirm={handleConfirmDeleteCategory}
           onClose={() => setModal(null)}
