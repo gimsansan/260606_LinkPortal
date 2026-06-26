@@ -75,7 +75,7 @@ export async function createCategory(
 
 export async function createLink(
   categoryId: string,
-  data: Pick<LinkItem, 'url' | 'title' | 'imageUrl' | 'faviconUrl' | 'source'>,
+  data: Pick<LinkItem, 'url' | 'title' | 'imageUrl' | 'faviconUrl' | 'source' | 'authorName'>,
 ): Promise<LinkItem> {
   const now = Date.now();
   const link: LinkItem = {
@@ -85,6 +85,7 @@ export async function createLink(
     title: data.title,
     imageUrl: data.imageUrl,
     faviconUrl: data.faviconUrl,
+    authorName: data.authorName,
     source: data.source,
     createdAt: now,
     updatedAt: now,
@@ -113,6 +114,11 @@ export async function deleteLink(id: string): Promise<void> {
   await db.links.delete(id);
 }
 
+export async function deleteLinks(ids: string[]): Promise<void> {
+  if (ids.length === 0) return;
+  await db.links.bulkDelete(ids);
+}
+
 export async function updateCategoryTitle(id: string, title: string): Promise<void> {
   await db.categories.update(id, { title, updatedAt: Date.now() });
 }
@@ -137,7 +143,7 @@ export async function moveCategory(id: string, newParentId: string | null): Prom
 
 export async function updateLink(
   id: string,
-  data: Partial<Pick<LinkItem, 'url' | 'title' | 'imageUrl' | 'faviconUrl' | 'source'>>,
+  data: Partial<Pick<LinkItem, 'url' | 'title' | 'imageUrl' | 'faviconUrl' | 'source' | 'authorName'>>,
 ): Promise<void> {
   await db.links.update(id, { ...data, updatedAt: Date.now() });
 }
@@ -146,14 +152,58 @@ export async function getAllCategories(): Promise<Category[]> {
   return db.categories.toArray();
 }
 
-export const INBOX_TITLE = '미분류';
+export const INBOX_TITLE = '🧺 링크 바구니';
+export const DEFAULT_NEW_FOLDER_TITLE = '🧺 새 폴더';
+const DEFAULT_FOLDER_NUMBERED_PATTERN = /^🧺 새 폴더 (\d+)$/;
+const LEGACY_INBOX_TITLES = ['미분류', '📌 나중에 정리'];
+
+export function isDefaultFolderTitle(title: string): boolean {
+  return title === DEFAULT_NEW_FOLDER_TITLE || DEFAULT_FOLDER_NUMBERED_PATTERN.test(title);
+}
+
+/** 같은 부모 아래 형제 폴더 이름을 보고 다음 기본 폴더명을 반환 */
+export function resolveNextDefaultFolderTitle(
+  siblings: Pick<Category, 'title'>[],
+): string {
+  const titles = new Set(siblings.map((c) => c.title));
+
+  if (!titles.has(DEFAULT_NEW_FOLDER_TITLE)) {
+    return DEFAULT_NEW_FOLDER_TITLE;
+  }
+
+  let n = 1;
+  while (titles.has(`${DEFAULT_NEW_FOLDER_TITLE} ${n}`)) {
+    n += 1;
+  }
+  return `${DEFAULT_NEW_FOLDER_TITLE} ${n}`;
+}
+
+/** 기본 폴더명 패턴이 형제와 겹치면 사용 가능한 번호로 바꿈 */
+export function ensureUniqueDefaultFolderTitle(
+  siblings: Pick<Category, 'title'>[],
+  title: string,
+): string {
+  const titles = new Set(siblings.map((c) => c.title));
+  if (!titles.has(title)) return title;
+  if (!isDefaultFolderTitle(title)) return title;
+  return resolveNextDefaultFolderTitle(siblings);
+}
 
 export async function getInboxCategory(): Promise<Category | undefined> {
   const roots = await getChildCategories(null);
-  return roots.find((c) => c.title === INBOX_TITLE);
+  const inbox = roots.find((c) => c.title === INBOX_TITLE);
+  if (inbox) return inbox;
+
+  const legacy = roots.find((c) => LEGACY_INBOX_TITLES.includes(c.title));
+  if (legacy) {
+    await updateCategoryTitle(legacy.id, INBOX_TITLE);
+    return { ...legacy, title: INBOX_TITLE, updatedAt: Date.now() };
+  }
+
+  return undefined;
 }
 
-/** 드롭 임포트용 — 없으면 루트에 미분류 카테고리 생성 */
+/** 드롭 임포트용 — 없으면 루트에 인박스 폴더 생성 */
 export async function getOrCreateInboxCategory(): Promise<Category> {
   const existing = await getInboxCategory();
   if (existing) return existing;
@@ -167,7 +217,20 @@ export async function moveLink(linkId: string, newCategoryId: string): Promise<v
   });
 }
 
-/** 최초 실행 — 빈 DB 유지 (더미 데이터 없음) */
+export async function moveLinks(linkIds: string[], newCategoryId: string): Promise<void> {
+  if (linkIds.length === 0) return;
+  const now = Date.now();
+  await Promise.all(
+    linkIds.map((id) =>
+      db.links.update(id, {
+        categoryId: newCategoryId,
+        updatedAt: now,
+      }),
+    ),
+  );
+}
+
+/** 최초 실행 — 빈 DB 유지 (폴더·링크 없음) */
 export async function seedIfEmpty(): Promise<void> {
   return;
 }

@@ -7,8 +7,6 @@
   --text: #eaeaea;
   --text-muted: #8892a4;
   --border: rgba(255, 255, 255, 0.08);
-  --bubble-size: 88px;
-  --center-size: 110px;
   --radius: 16px;
   --font: 'Segoe UI', system-ui, -apple-system, sans-serif;
 }
@@ -79,44 +77,32 @@ button {
   overflow: hidden;
 }
 
-/* 데스크톱: 좌(폴더 트리) · 우(링크) 독립 스크롤 */
-@media (min-width: 768px) {
-  .app.app--tree-layout {
-    height: 100vh;
-    height: 100dvh;
-    max-height: 100vh;
-    max-height: 100dvh;
-    overflow: hidden;
-  }
+/* 좌(폴더 트리) · 우(링크) 독립 스크롤 */
+.app.app--tree-layout {
+  height: 100vh;
+  height: 100dvh;
+  max-height: 100vh;
+  max-height: 100dvh;
+  overflow: hidden;
+}
 
-  .app--tree-layout .tree-view-drop {
-    overflow: hidden;
-    min-height: 0;
-    align-self: stretch;
-  }
+.app--tree-layout .tree-view {
+  height: 100%;
+  overflow: hidden;
+}
 
-  .app--tree-layout .tree-view {
-    height: 100%;
-    overflow: hidden;
-  }
+.app--tree-layout .tree-view__list {
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
 
-  .app--tree-layout .tree-view__list {
-    overflow-y: auto;
-    overscroll-behavior: contain;
-    scrollbar-gutter: stable;
-  }
-
-  .app--tree-layout .app-main {
-    overflow: hidden;
-    min-height: 0;
-  }
-
-  .app--tree-layout .app-main > .link-drop-zone {
-    overflow-y: auto;
-    overflow-x: hidden;
-    overscroll-behavior: contain;
-    scrollbar-gutter: stable;
-  }
+.app--tree-layout .app-main {
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+  min-height: 0;
 }
 
 .app-main {
@@ -126,87 +112,7 @@ button {
   min-width: 0;
 }
 
-/* Radial bubble view (모바일 전용) */
-.radial-view {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  padding: 16px;
-}
-
-.radial-view__toolbar {
-  display: flex;
-  justify-content: space-between;
-  margin-bottom: 8px;
-}
-
-.radial-view__stage {
-  flex: 1;
-  position: relative;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 320px;
-}
-
-.bubble {
-  position: absolute;
-  border: 2px solid var(--border);
-  border-radius: 50%;
-  background: var(--bg-elevated);
-  color: var(--text);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  text-align: center;
-  transition: transform 0.2s, border-color 0.2s, box-shadow 0.2s;
-  padding: 8px;
-}
-
-.bubble:hover:not(:disabled) {
-  border-color: var(--accent);
-  box-shadow: 0 0 24px var(--accent-soft);
-}
-
-.bubble--center {
-  width: var(--center-size);
-  height: var(--center-size);
-  z-index: 2;
-  border-color: var(--accent);
-  background: linear-gradient(145deg, var(--surface), var(--bg-elevated));
-}
-
-.bubble--center:disabled {
-  cursor: default;
-  opacity: 0.9;
-}
-
-.bubble--orbit {
-  width: var(--bubble-size);
-  height: var(--bubble-size);
-  margin-left: calc(var(--bubble-size) / -2);
-  margin-top: calc(var(--bubble-size) / -2);
-}
-
-.bubble__label {
-  font-size: 0.8rem;
-  font-weight: 500;
-  line-height: 1.2;
-  word-break: keep-all;
-}
-
-.bubble--center .bubble__label {
-  font-size: 0.95rem;
-}
-
-.bubble__count {
-  font-size: 0.7rem;
-  color: var(--accent);
-  margin-top: 4px;
-}
-
-/* Tree view (웹 전용) */
+/* Tree view */
 .tree-view {
   width: 260px;
   flex-shrink: 0;
@@ -214,19 +120,6 @@ button {
   border-right: 1px solid var(--border);
   display: flex;
   flex-direction: column;
-  min-height: 0;
-}
-
-.tree-view-drop {
-  flex-shrink: 0;
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-  align-self: stretch;
-}
-
-.tree-view-drop > .tree-view {
-  flex: 1;
   min-height: 0;
 }
 
@@ -503,36 +396,28 @@ button {
   width: 100%;
 }
 
-/* Drop zone (.url / text/uri-list import) — LinkDropZone.tsx */
-.app-main > .link-drop-zone {
+/* Drop zone — App.tsx `link-drop-zone--app` */
+.link-drop-zone--app {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  position: relative;
+}
+
+.link-drop-zone--app > .app-body {
   flex: 1;
   min-height: 0;
 }
 
-.link-drop-zone {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  min-height: 200px;
-  position: relative;
-}
-
-.link-drop-zone--active .link-list {
+.link-drop-zone--app.link-drop-zone--active > .app-body {
   opacity: 0.35;
   transition: opacity 0.15s ease;
 }
-
-.link-drop-zone--active .tree-view,
-.link-drop-zone--active .radial-view,
-.link-drop-zone--active .empty-state--droppable {
-  opacity: 0.35;
-  transition: opacity 0.15s ease;
-}
-
 
 .link-drop-zone__overlay {
   position: absolute;
-  inset: 16px;
+  inset: 12px;
   border: 2px dashed var(--accent);
   border-radius: var(--radius);
   background: var(--accent-soft);
@@ -570,8 +455,8 @@ button {
 
 .link-list__grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
-  gap: 16px;
+  grid-template-columns: repeat(auto-fill, minmax(172px, 1fr));
+  gap: 24px;
 }
 
 .link-card {
@@ -595,6 +480,12 @@ button {
 .link-card--manual {
   background: var(--bg-elevated);
   border-style: dashed;
+}
+
+.link-card--selected {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  box-shadow: 0 0 0 1px var(--accent-soft);
 }
 
 .link-card__visual {
@@ -624,7 +515,10 @@ button {
 }
 
 .link-card__favicon-placeholder {
-  font-size: 2rem;
+  font-size: 2.2rem;
+  background: rgba(255, 255, 255, 0.12);
+  padding: 8px 14px;
+  border-radius: 12px;
 }
 
 .link-card__badge {
@@ -649,6 +543,16 @@ button {
   overflow: hidden;
 }
 
+.link-card__author {
+  font-size: 0.7rem;
+  color: var(--text-secondary, #888);
+  margin: 0;
+  padding: 0 12px 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .link-card__edit,
 .link-card__move,
 .link-card__delete {
@@ -656,14 +560,25 @@ button {
   top: 6px;
   width: 24px;
   height: 24px;
-  border: none;
+  border: 1px solid transparent;
   border-radius: 50%;
   background: rgba(0, 0, 0, 0.6);
   color: #fff;
   font-size: 0.75rem;
   line-height: 1;
   opacity: 0;
-  transition: opacity 0.15s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  transition: opacity 0.15s, border-color 0.15s, background 0.15s;
+}
+
+.link-card__edit:hover,
+.link-card__move:hover,
+.link-card__delete:hover {
+  border-color: var(--accent);
+  background: rgba(0, 0, 0, 0.78);
 }
 
 .link-card__edit {
@@ -671,8 +586,13 @@ button {
 }
 
 .link-card__move {
-  left: 34px;
+  left: 50%;
+  transform: translateX(-50%);
   font-size: 0.7rem;
+}
+
+.link-card__move:hover {
+  transform: translateX(-50%);
 }
 
 .link-card__delete {
@@ -823,15 +743,8 @@ button {
   min-height: 200px;
   font-size: 1.2rem;
   padding: 2rem;
-}
-
-/* 데스크톱: 좌측 카테고리 사이드바(260px)만큼 우측으로 쏠려 보이므로
-   콘텐츠 폭 기준 %로 왼쪽으로 당겨 창 중앙 근처에 배치 */
-@media (min-width: 768px) {
-  .app-main .empty-state--droppable,
-  .link-list .empty-state {
-    transform: translateX(-15%);
-  }
+  max-width: 100%;
+  text-wrap: balance;
 }
 
 /* 링크 빈 상태도 안내 문구처럼 영역 중앙에 크게 배치 */
@@ -843,14 +756,51 @@ button {
   font-size: 1.2rem;
 }
 
-@media (max-width: 767px) {
-  .radial-view__stage {
-    min-height: 380px;
-  }
-
-  :root {
-    --bubble-size: 76px;
-    --center-size: 96px;
-  }
+/* ── Toast (미션 피드백) ── */
+.toast-host {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  z-index: 10000;
+  transform: translateX(-50%);
+  pointer-events: none;
 }
 
+.toast {
+  padding: 10px 18px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--bg-elevated);
+  color: var(--text);
+  font-size: 0.85rem;
+  line-height: 1.3;
+  white-space: nowrap;
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.28);
+  animation: toast-in 0.22s ease-out;
+}
+
+.toast--mission {
+  border-color: var(--accent);
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.toast--unlock {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--text);
+  white-space: normal;
+  max-width: min(92vw, 320px);
+  text-align: center;
+}
+
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}

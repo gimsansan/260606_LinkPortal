@@ -8,6 +8,12 @@ interface LinkDropZoneProps {
   className?: string;
 }
 
+function isExternalLinkImport(e: DragEvent): boolean {
+  const types = e.dataTransfer.types;
+  if (types.includes('application/linkportal-link')) return false;
+  return types.includes('Files') || types.includes('text/uri-list') || types.includes('text/plain');
+}
+
 export function LinkDropZone({ enabled, onDropLinks, children, className }: LinkDropZoneProps) {
   const [active, setActive] = useState(false);
   const depthRef = useRef(0);
@@ -15,6 +21,7 @@ export function LinkDropZone({ enabled, onDropLinks, children, className }: Link
   if (!enabled) return <>{children}</>;
 
   const handleDragEnter = (e: DragEvent) => {
+    if (!isExternalLinkImport(e)) return;
     e.preventDefault();
     depthRef.current += 1;
     if (depthRef.current === 1) setActive(true);
@@ -30,11 +37,13 @@ export function LinkDropZone({ enabled, onDropLinks, children, className }: Link
   };
 
   const handleDragOver = (e: DragEvent) => {
+    if (!isExternalLinkImport(e)) return;
     e.preventDefault();
     e.dataTransfer.dropEffect = 'copy';
   };
 
   const handleDrop = async (e: DragEvent) => {
+    if (!isExternalLinkImport(e)) return;
     e.preventDefault();
     depthRef.current = 0;
     setActive(false);

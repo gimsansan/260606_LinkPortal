@@ -1,16 +1,9 @@
 import { useEffect, useRef, useState, type DragEvent } from 'react';
 import type { Category } from '../types';
-import { LinkDropZone } from './LinkDropZone';
-
-const LINK_DRAG_TYPE = 'application/linkportal-link';
+import { isLinkDragType, LINK_DRAG_TYPE } from '../services/linkDrag';
 
 function isLinkDrag(e: DragEvent): boolean {
-  return e.dataTransfer.types.includes(LINK_DRAG_TYPE);
-}
-
-interface DropLinkItem {
-  url: string;
-  title?: string;
+  return isLinkDragType(e.dataTransfer.types);
 }
 
 function FolderIcon({ open }: { open: boolean }) {
@@ -259,7 +252,6 @@ interface TreeViewProps {
   onRename: (id: string, title: string) => void;
   onMove: (id: string) => void;
   onDelete: (id: string) => void;
-  onDropImport?: (items: DropLinkItem[]) => void | Promise<void>;
   onLinkDrop?: (categoryId: string, data: string) => void;
 }
 
@@ -272,7 +264,6 @@ export function TreeView({
   onRename,
   onMove,
   onDelete,
-  onDropImport,
   onLinkDrop,
 }: TreeViewProps) {
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
@@ -315,11 +306,5 @@ export function TreeView({
     </aside>
   );
 
-  if (!onDropImport) return aside;
-
-  return (
-    <LinkDropZone enabled onDropLinks={onDropImport} className="tree-view-drop">
-      {aside}
-    </LinkDropZone>
-  );
+  return aside;
 }

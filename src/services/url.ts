@@ -14,6 +14,8 @@ export function extractYouTubeVideoId(url: string): string | null {
       if (v) return v;
       const embed = parsed.pathname.match(/\/embed\/([^/?]+)/);
       if (embed) return embed[1];
+      const shorts = parsed.pathname.match(/\/shorts\/([^/?]+)/);  // ← 추가
+      if (shorts) return shorts[1];                                 // ← 추가
     }
   } catch {
     return null;

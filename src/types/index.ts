@@ -17,6 +17,7 @@ export interface LinkItem {
   imageUrl?: string;
   faviconUrl?: string;
   source: 'auto' | 'manual';
+  authorName?: string;
   createdAt: number;
   updatedAt: number;
 }
@@ -25,4 +26,5 @@ export interface LinkMetadata {
   title: string;
   imageUrl?: string;
   faviconUrl?: string;
+  authorName?: string;
 }

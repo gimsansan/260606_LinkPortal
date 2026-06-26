@@ -18,6 +18,7 @@ async function fetchYouTubeMetadata(url: string): Promise<LinkMetadata | null> {
     return {
       title: data.title ?? 'YouTube',
       imageUrl: getYouTubeThumbnail(videoId),
+      authorName: data.author_name ?? undefined,
     };
   } catch {
     return {

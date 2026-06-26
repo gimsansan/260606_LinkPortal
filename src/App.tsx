@@ -5,28 +5,39 @@ import {
   createCategory,
   createLink,
   deleteLink,
+  deleteLinks,
   deleteCategory,
   updateCategoryTitle,
   moveCategory,
   moveLink,
+  moveLinks,
   updateLink,
   getAllCategories,
   getCategory,
+  getInboxCategory,
+  getLinksByCategory,
   getOrCreateInboxCategory,
+  DEFAULT_NEW_FOLDER_TITLE,
+  resolveNextDefaultFolderTitle,
+  ensureUniqueDefaultFolderTitle,
 } from './db';
 import { useCategories } from './hooks/useCategories';
 import { useLinks } from './hooks/useLinks';
-import { useIsDesktop } from './hooks/useMediaQuery';
 import { useTheme } from './hooks/useTheme';
+import { useInstantDelete } from './hooks/useInstantDelete';
+import { useToast } from './hooks/useToast';
+import { parseLinkDragPayload } from './services/linkDrag';
+import { recordInboxOrganize } from './services/missions';
 import { fetchLinkMetadata } from './services/metadata';
 import { isValidUrl, getFaviconUrl, extractYouTubeVideoId } from './services/url';
-import { RadialBubbleView } from './components/RadialBubbleView';
 import { TreeView } from './components/TreeView';
 import { LinkCardList } from './components/LinkCardList';
 import { EmptyDropPanel } from './components/EmptyDropPanel';
+import { LinkDropZone } from './components/LinkDropZone';
 import { YouTubePlayer } from './components/YouTubePlayer';
-import { DragTrashZone } from './components/DragTrashZone';
 import { ThemeToggle } from './components/ThemeToggle';
+import { Toast } from './components/Toast';
+import './components/drag-interactions.css';
 import {
   InputModal,
   AddLinkModal,
@@ -37,8 +48,6 @@ import {
   type AddLinkOptions,
 } from './components/InputModal';
 
-type Screen = 'categories' | 'links';
-
 type ModalState =
   | { type: 'add-category' }
   | { type: 'add-link' }
@@ -47,18 +56,20 @@ type ModalState =
   | { type: 'move-link'; link: LinkItem }
   | { type: 'edit-link'; link: LinkItem }
   | { type: 'confirm-delete-category'; id: string; title: string }
+  | { type: 'confirm-delete-link'; id: string; title: string }
+  | { type: 'confirm-delete-page-links'; ids: string[]; count: number }
   | null;
 
 export function App() {
-  const isDesktop = useIsDesktop();
   const { theme, cycleTheme } = useTheme();
+  const { instantDelete, setInstantDelete } = useInstantDelete();
+  const { toast, showToast } = useToast();
   const [ready, setReady] = useState(false);
   const [navStack, setNavStack] = useState<string[]>([]);
-  const [screen, setScreen] = useState<Screen>('categories');
   const [allCategories, setAllCategories] = useState<Awaited<ReturnType<typeof getAllCategories>>>([]);
 
-  const currentParentId = navStack.length > 0 ? navStack[navStack.length - 1] : null;
-  const { categories, current, refresh: refreshCategories } = useCategories(currentParentId);
+  const currentParentId = navStack.at(-1) ?? null;
+  const { current, refresh: refreshCategories } = useCategories(currentParentId);
   const activeCategoryId = current?.id ?? currentParentId;
   const { links, refresh: refreshLinks } = useLinks(activeCategoryId);
 
@@ -68,8 +79,6 @@ export function App() {
   );
 
   const [playingLink, setPlayingLink] = useState<LinkItem | null>(null);
-
-  const [draggingLink, setDraggingLink] = useState<LinkItem | null>(null);
 
   const youtubePlaylist = useMemo(
     () => links.filter((l) => !!extractYouTubeVideoId(l.url)),
@@ -89,13 +98,27 @@ export function App() {
     setNavStack((s) => s.filter((id) => validIds.has(id)));
   }, [refreshCategories, refreshLinks]);
 
+  const showOrganizeFeedback = useCallback(
+    async (movedCount: number, inboxId: string) => {
+      const inboxLinks = await getLinksByCategory(inboxId);
+      const inboxEmpty = inboxLinks.length === 0;
+      recordInboxOrganize(movedCount);
+
+      showToast('정리 완료!', 1000);
+      if (inboxEmpty) {
+        showToast('🧺 바구니 클리어', 2200, 'mission');
+      }
+    },
+    [showToast],
+  );
+
   useEffect(() => {
     if (ready) refreshAll();
   }, [ready, currentParentId, refreshAll]);
 
   const centerTitle = current?.title ?? (navStack.length === 0 ? '폴더' : 'Topic');
 
-  const selectCategoryById = async (id: string) => {
+  const selectCategoryById = useCallback(async (id: string) => {
     const path: string[] = [];
     let cat = await getCategory(id);
     while (cat) {
@@ -103,7 +126,26 @@ export function App() {
       cat = cat.parentId ? await getCategory(cat.parentId) : undefined;
     }
     setNavStack(path);
-  };
+  }, []);
+
+  useEffect(() => {
+    if (!ready || navStack.length > 0 || allCategories.length === 0) return;
+
+    let cancelled = false;
+    (async () => {
+      const inbox = await getInboxCategory();
+      const roots = allCategories
+        .filter((c) => c.parentId === null)
+        .sort((a, b) => a.sortOrder - b.sortOrder);
+      const targetId = inbox?.id ?? roots[0]?.id;
+      if (!targetId || cancelled) return;
+      await selectCategoryById(targetId);
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [ready, navStack.length, allCategories, selectCategoryById]);
 
   const resolveImportCategoryId = async (): Promise<string> => {
     if (activeCategoryId) return activeCategoryId;
@@ -111,24 +153,11 @@ export function App() {
     return inbox.id;
   };
 
-  const drillDown = (categoryId: string) => {
-    setNavStack((s) => [...s, categoryId]);
-    setScreen('categories');
-  };
-
-  const goBack = () => {
-    if (screen === 'links') {
-      setScreen('categories');
-      return;
-    }
-    if (navStack.length > 0) {
-      setNavStack((s) => s.slice(0, -1));
-    }
-  };
-
   const handleAddCategory = async (title: string) => {
-    const parentId = addCategoryParentId !== undefined ? addCategoryParentId : currentParentId;
-    const cat = await createCategory(parentId, title);
+    const parentId = addCategoryParentId === undefined ? currentParentId : addCategoryParentId;
+    const siblings = allCategories.filter((c) => c.parentId === parentId);
+    const resolvedTitle = ensureUniqueDefaultFolderTitle(siblings, title.trim());
+    const cat = await createCategory(parentId, resolvedTitle);
     await refreshAll();
 
     const path: string[] = [];
@@ -137,11 +166,7 @@ export function App() {
       path.unshift(c.id);
       c = c.parentId ? await getCategory(c.parentId) : undefined;
     }
-    if (isDesktop) {
-      setNavStack(path);
-    } else if (parentId === currentParentId) {
-      setNavStack((s) => [...s, cat.id]);
-    }
+    setNavStack(path);
     setAddCategoryParentId(undefined);
   };
 
@@ -184,6 +209,7 @@ export function App() {
         imageUrl: meta.imageUrl,
         faviconUrl: meta.faviconUrl ?? getFaviconUrl(url),
         source: hasRichMeta ? 'auto' : 'manual',
+        authorName: meta.authorName,
       });
       return;
     }
@@ -196,6 +222,7 @@ export function App() {
       imageUrl: meta.imageUrl,
       faviconUrl: meta.faviconUrl,
       source: hasRichMeta ? 'auto' : 'manual',
+      authorName: meta.authorName,
     });
   };
 
@@ -218,9 +245,47 @@ export function App() {
     await refreshAll();
   };
 
-  const handleDeleteLink = async (id: string) => {
-    await deleteLink(id);
-    await refreshAll();
+  const executeDeleteLinks = useCallback(
+    async (ids: string[]) => {
+      if (ids.length === 0) return;
+      if (ids.length === 1) {
+        await deleteLink(ids[0]);
+      } else {
+        await deleteLinks(ids);
+      }
+      await refreshAll();
+    },
+    [refreshAll],
+  );
+
+  const handleRequestDeleteLink = (id: string) => {
+    if (instantDelete) {
+      void executeDeleteLinks([id]);
+      return;
+    }
+    const link = links.find((l) => l.id === id);
+    if (link) setModal({ type: 'confirm-delete-link', id, title: link.title });
+  };
+
+  const handleConfirmDeleteLink = async () => {
+    if (modal?.type !== 'confirm-delete-link') return;
+    await executeDeleteLinks([modal.id]);
+    setModal(null);
+  };
+
+  const handleRequestDeletePageLinks = (ids: string[]) => {
+    if (ids.length === 0) return;
+    if (instantDelete) {
+      void executeDeleteLinks(ids);
+      return;
+    }
+    setModal({ type: 'confirm-delete-page-links', ids, count: ids.length });
+  };
+
+  const handleConfirmDeletePageLinks = async () => {
+    if (modal?.type !== 'confirm-delete-page-links') return;
+    await executeDeleteLinks(modal.ids);
+    setModal(null);
   };
 
   const handleEditLink = async (url: string, title: string) => {
@@ -236,10 +301,20 @@ export function App() {
 
   const handleMoveLink = async (categoryId: string) => {
     if (modal?.type !== 'move-link') return;
-    await moveLink(modal.link.id, categoryId);
+    const link = modal.link;
+    const inbox = await getInboxCategory();
+    const isOrganize = inbox
+      ? link.categoryId === inbox.id && categoryId !== inbox.id
+      : false;
+
+    await moveLink(link.id, categoryId);
     setModal(null);
     await selectCategoryById(categoryId);
     await refreshAll();
+
+    if (isOrganize && inbox) {
+      await showOrganizeFeedback(1, inbox.id);
+    }
   };
 
   const handleRenameCategory = async (title: string) => {
@@ -275,33 +350,31 @@ export function App() {
     setPlayingLink(null);
   }, []);
 
-  const handleCardDragStart = useCallback((link: LinkItem) => {
-    setDraggingLink(link);
-  }, []);
-
-  const handleCardDragEnd = useCallback(() => {
-    setDraggingLink(null);
-  }, []);
-
-  const handleTrashDrop = useCallback(async () => {
-    if (!draggingLink) return;
-    await deleteLink(draggingLink.id);
-    setDraggingLink(null);
-    await refreshAll();
-  }, [draggingLink, refreshAll]);
-
   const handleTreeLinkDrop = useCallback(async (categoryId: string, data: string) => {
-    try {
-      const parsed = JSON.parse(data);
-      if (parsed?.id) {
-        await moveLink(parsed.id, categoryId);
-        setDraggingLink(null);
-        await refreshAll();
-      }
-    } catch {
-      // linkportal-link 포맷이 아닌 경우 무시
+    const payload = parseLinkDragPayload(data);
+    if (!payload) return;
+
+    const inbox = await getInboxCategory();
+    const isOrganize = inbox
+      ? payload.categoryId === inbox.id && categoryId !== inbox.id
+      : false;
+
+    await moveLinks(payload.ids, categoryId);
+    await refreshAll();
+
+    if (isOrganize && inbox) {
+      await showOrganizeFeedback(payload.ids.length, inbox.id);
     }
-  }, [refreshAll]);
+  }, [refreshAll, showOrganizeFeedback]);
+
+  const nextDefaultFolderTitle = useMemo(() => {
+    if (modal?.type === 'add-category') {
+      const parentId = addCategoryParentId === undefined ? currentParentId : addCategoryParentId;
+      const siblings = allCategories.filter((c) => c.parentId === parentId);
+      return resolveNextDefaultFolderTitle(siblings);
+    }
+    return DEFAULT_NEW_FOLDER_TITLE;
+  }, [modal, addCategoryParentId, currentParentId, allCategories]);
 
   if (!ready) {
     return <div className="app-loading">로딩 중…</div>;
@@ -316,22 +389,14 @@ export function App() {
     '왼쪽에서 폴더를 선택하거나, + 버튼으로 새로 만들어 보세요.';
 
   return (
-    <div className={`app ${isDesktop ? 'app--tree-layout' : ''}`}>
-      {isDesktop && (
-        <header className="app-header">
-          <h1 className="app-header__logo">LinkPortal</h1>
-          <ThemeToggle theme={theme} onToggle={cycleTheme} />
-        </header>
-      )}
+    <div className="app app--tree-layout">
+      <header className="app-header">
+        <h1 className="app-header__logo">LinkPortal</h1>
+        <ThemeToggle theme={theme} onToggle={cycleTheme} />
+      </header>
 
-      {!isDesktop && (
-        <div className="app-mobile-theme">
-          <ThemeToggle theme={theme} onToggle={cycleTheme} />
-        </div>
-      )}
-
-      <div className="app-body">
-        {isDesktop && (
+      <LinkDropZone enabled onDropLinks={handleDropImport} className="link-drop-zone--app">
+        <div className="app-body">
           <TreeView
             categories={allCategories}
             selectedId={activeCategoryId ?? null}
@@ -344,63 +409,29 @@ export function App() {
               const cat = allCategories.find((c) => c.id === id);
               if (cat) setModal({ type: 'confirm-delete-category', id, title: cat.title });
             }}
-            onDropImport={handleDropImport}
             onLinkDrop={handleTreeLinkDrop}
           />
-        )}
 
-        <main className="app-main">
-          {isDesktop ? (
-            activeCategoryId ? (
+          <main className="app-main">
+            {activeCategoryId ? (
               <LinkCardList
                 links={links}
                 categoryTitle={centerTitle}
                 onAddLink={() => setModal({ type: 'add-link' })}
-                onDeleteLink={handleDeleteLink}
+                onDeleteLink={handleRequestDeleteLink}
+                onDeletePageLinks={handleRequestDeletePageLinks}
                 onEditLink={(link) => setModal({ type: 'edit-link', link })}
                 onMoveLink={(link) => setModal({ type: 'move-link', link })}
                 onPlayVideo={handlePlayVideo}
-                onDragStart={handleCardDragStart}
-                onDragEnd={handleCardDragEnd}
-                onDropImport={handleDropImport}
+                instantDelete={instantDelete}
+                onInstantDeleteChange={setInstantDelete}
               />
             ) : (
-              <EmptyDropPanel message={emptyMainMessage} onDropImport={handleDropImport} />
-            )
-          ) : screen === 'links' && activeCategoryId ? (
-            <LinkCardList
-              links={links}
-              categoryTitle={centerTitle}
-              onBack={goBack}
-              onAddLink={() => setModal({ type: 'add-link' })}
-              onDeleteLink={handleDeleteLink}
-              onEditLink={(link) => setModal({ type: 'edit-link', link })}
-              onMoveLink={(link) => setModal({ type: 'move-link', link })}
-              onPlayVideo={handlePlayVideo}
-              onDragStart={handleCardDragStart}
-              onDragEnd={handleCardDragEnd}
-              onDropImport={handleDropImport}
-            />
-          ) : (
-            <RadialBubbleView
-              centerTitle={centerTitle}
-              categories={categories}
-              linkCount={links.length}
-              canGoBack={navStack.length > 0}
-              onSelectCategory={drillDown}
-              onViewLinks={() => setScreen('links')}
-              onBack={goBack}
-              onAddCategory={() => openAddCategory()}
-              onDropImport={handleDropImport}
-            />
-          )}
-        </main>
-      </div>
-
-      <DragTrashZone
-        visible={!!draggingLink}
-        onDrop={handleTrashDrop}
-      />
+              <EmptyDropPanel message={emptyMainMessage} />
+            )}
+          </main>
+        </div>
+      </LinkDropZone>
 
       {playingLink && (
         <YouTubePlayer
@@ -416,6 +447,7 @@ export function App() {
           title="폴더 추가"
           placeholder="폴더 이름"
           submitLabel="추가"
+          initialValue={nextDefaultFolderTitle}
           onSubmit={handleAddCategory}
           onClose={closeAddCategoryModal}
         />
@@ -464,6 +496,24 @@ export function App() {
           onClose={() => setModal(null)}
         />
       )}
+      {modal?.type === 'confirm-delete-link' && (
+        <ConfirmModal
+          title="링크 삭제"
+          message={`"${modal.title}" 링크를 삭제할까요?`}
+          onConfirm={handleConfirmDeleteLink}
+          onClose={() => setModal(null)}
+        />
+      )}
+      {modal?.type === 'confirm-delete-page-links' && (
+        <ConfirmModal
+          title="현재 페이지 삭제"
+          message={`현재 페이지의 ${modal.count}개 링크를 모두 삭제할까요? 되돌릴 수 없습니다.`}
+          onConfirm={handleConfirmDeletePageLinks}
+          onClose={() => setModal(null)}
+        />
+      )}
+
+      <Toast toast={toast} />
     </div>
   );
 }

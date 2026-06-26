@@ -4,12 +4,14 @@ const THEME_ICON: Record<Theme, string> = {
   dark: '🌙',
   light: '☀️',
   neon: '✨',
+  crimson: '🅰️',
 };
 
 const THEME_LABEL: Record<Theme, string> = {
   dark: '다크',
   light: '라이트',
   neon: '네온',
+  crimson: '크림슨',
 };
 
 interface ThemeToggleProps {
