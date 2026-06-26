@@ -17,6 +17,7 @@ import {
 import { useCategories } from './hooks/useCategories';
 import { useLinks } from './hooks/useLinks';
 import { useIsDesktop } from './hooks/useMediaQuery';
+import { useTheme } from './hooks/useTheme';
 import { fetchLinkMetadata } from './services/metadata';
 import { isValidUrl, getFaviconUrl, extractYouTubeVideoId } from './services/url';
 import { RadialBubbleView } from './components/RadialBubbleView';
@@ -25,6 +26,7 @@ import { LinkCardList } from './components/LinkCardList';
 import { EmptyDropPanel } from './components/EmptyDropPanel';
 import { YouTubePlayer } from './components/YouTubePlayer';
 import { DragTrashZone } from './components/DragTrashZone';
+import { ThemeToggle } from './components/ThemeToggle';
 import {
   InputModal,
   AddLinkModal,
@@ -49,6 +51,7 @@ type ModalState =
 
 export function App() {
   const isDesktop = useIsDesktop();
+  const { theme, cycleTheme } = useTheme();
   const [ready, setReady] = useState(false);
   const [navStack, setNavStack] = useState<string[]>([]);
   const [screen, setScreen] = useState<Screen>('categories');
@@ -317,7 +320,14 @@ export function App() {
       {isDesktop && (
         <header className="app-header">
           <h1 className="app-header__logo">LinkPortal</h1>
+          <ThemeToggle theme={theme} onToggle={cycleTheme} />
         </header>
+      )}
+
+      {!isDesktop && (
+        <div className="app-mobile-theme">
+          <ThemeToggle theme={theme} onToggle={cycleTheme} />
+        </div>
       )}
 
       <div className="app-body">

@@ -85,11 +85,11 @@ function TreeNodeMenu({ isOpen, onOpenChange, onMove, onAddChild, onDelete }: Tr
         <div className="tree-node__menu" role="menu">
           <button
             type="button"
-            className="tree-node__menu-item"
+            className="tree-node__menu-item tree-node__menu-item--move"
             role="menuitem"
             onClick={() => run(onMove)}
           >
-            <span className="tree-node__menu-emoji" aria-hidden="true">🚚</span>
+            <span className="tree-node__menu-emoji" aria-hidden="true">↗</span>
             <span className="tree-node__menu-label">이동</span>
           </button>
           <button
@@ -98,7 +98,7 @@ function TreeNodeMenu({ isOpen, onOpenChange, onMove, onAddChild, onDelete }: Tr
             role="menuitem"
             onClick={() => run(onAddChild)}
           >
-            <span className="tree-node__menu-emoji" aria-hidden="true">🆕</span>
+            <span className="tree-node__menu-emoji" aria-hidden="true">📁</span>
             <span className="tree-node__menu-label">하위 폴더 추가</span>
           </button>
           <div className="tree-node__menu-divider" role="separator" />
@@ -185,7 +185,7 @@ function TreeNode({
       className={`tree-node${isNested ? ' tree-node--nested' : ''}${isLastChild ? ' tree-node--last' : ''}`}
     >
       <div
-        className={`tree-node__row ${isSelected ? 'tree-node__row--selected' : ''}${isDropTarget ? ' tree-node--drop-target' : ''}`}
+        className={`tree-node__row ${isSelected ? 'tree-node__row--selected' : ''}${isMenuOpen ? ' tree-node__row--menu-open' : ''}${isDropTarget ? ' tree-node--drop-target' : ''}`}
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}

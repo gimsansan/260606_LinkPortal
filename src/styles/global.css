@@ -31,6 +31,7 @@ body {
 
 #root {
   min-height: 100%;
+  height: 100%;
 }
 
 button {
@@ -75,6 +76,47 @@ button {
 
 .app--tree-layout .app-body {
   flex-direction: row;
+  overflow: hidden;
+}
+
+/* 데스크톱: 좌(폴더 트리) · 우(링크) 독립 스크롤 */
+@media (min-width: 768px) {
+  .app.app--tree-layout {
+    height: 100vh;
+    height: 100dvh;
+    max-height: 100vh;
+    max-height: 100dvh;
+    overflow: hidden;
+  }
+
+  .app--tree-layout .tree-view-drop {
+    overflow: hidden;
+    min-height: 0;
+    align-self: stretch;
+  }
+
+  .app--tree-layout .tree-view {
+    height: 100%;
+    overflow: hidden;
+  }
+
+  .app--tree-layout .tree-view__list {
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-gutter: stable;
+  }
+
+  .app--tree-layout .app-main {
+    overflow: hidden;
+    min-height: 0;
+  }
+
+  .app--tree-layout .app-main > .link-drop-zone {
+    overflow-y: auto;
+    overflow-x: hidden;
+    overscroll-behavior: contain;
+    scrollbar-gutter: stable;
+  }
 }
 
 .app-main {
@@ -225,6 +267,12 @@ button {
   border-radius: 4px;
 }
 
+/* 메뉴 펼침 시 하위/형제 행 위에 표시 (이동 클릭 가로채기 방지) */
+.tree-node__row--menu-open {
+  position: relative;
+  z-index: 20;
+}
+
 .tree-node__row:hover {
   background: rgba(255, 255, 255, 0.04);
 }
@@ -346,7 +394,7 @@ button {
   position: absolute;
   right: 0;
   top: calc(100% + 4px);
-  z-index: 100;
+  z-index: 1;
   min-width: 188px;
   padding: 6px;
   border-radius: 10px;
@@ -372,6 +420,21 @@ button {
 
 .tree-node__menu-item:hover {
   background: rgba(255, 255, 255, 0.08);
+}
+
+.tree-node__menu-item--move .tree-node__menu-emoji {
+  color: var(--accent);
+  font-weight: 700;
+  font-size: 15px;
+}
+
+.tree-node__menu-item--move:hover {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.tree-node__menu-item--move:hover .tree-node__menu-label {
+  color: var(--accent);
 }
 
 .tree-node__menu-item--danger:hover {

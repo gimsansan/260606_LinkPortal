@@ -15,7 +15,7 @@
 | **인증은 대상 사이트에 위임** | iframe 로그인·자격증명 저장 없음 |
 | **로컬 PWA** | IndexedDB(Dexie), 기기별 데이터 |
 | **구조 커스터마이징** | 카테고리 트리 생성·이름변경·이동·삭제, 링크 편집·이동(버튼 + **드래그앤드롭**) |
-| **외형 커스터마이징** | 현재 범위 밖 (앱 기본 다크 테마) |
+| **외형 커스터마이징** | **3테마** (dark / light / neon) — 헤더·모바일 토글, `localStorage`(`linkportal-theme`) 저장 (§3 Phase 11) |
 
 ---
 
@@ -25,7 +25,7 @@
 - **Dexie 4** (IndexedDB)
 - **vite-plugin-pwa** (manifest, service worker)
 - **react-youtube** (YouTube IFrame 인앱 플레이어)
-- 스타일: 기본 `src/styles/global.css`(CSS 변수, BEM 유사) + 기능별 컴포넌트 CSS
+- 스타일: `src/styles/global.css`(CSS 변수, BEM 유사) + `src/styles/theme.css`(테마 팔레트·오버라이드, **global.css 뒤에** `main.tsx`에서 import) + 기능별 컴포넌트 CSS
   (`components/YouTubePlayer.css`, `components/link-list-panel.css`, `components/drag-interactions.css`)
 
 ```bash
@@ -52,7 +52,7 @@ PWA 아이콘 재생성: `scripts/generate-pwa-icons.ps1` → `public/pwa-192.pn
 
 | 플랫폼 | 네비게이션 | 링크 표시 |
 |--------|------------|-----------|
-| **웹 (≥768px)** | `TreeView` 사이드바 | `LinkCardList` 그리드 |
+| **웹 (≥768px)** | `TreeView` 사이드바 (좌 스크롤) | `LinkCardList` 그리드 (우 스크롤) |
 | **모바일** | `RadialBubbleView` 방사형 + drill-down | 링크 화면에서 `LinkCardList` |
 
 - 초기에는 웹에 방사형/트리 **토글**이 있었음 → **웹은 트리 전용**으로 정리 (토글·dead CSS 제거)
@@ -117,6 +117,28 @@ PWA 아이콘 재생성: `scripts/generate-pwa-icons.ps1` → `public/pwa-192.pn
 - 빈 화면/빈 목록 안내 문구 친화적으로 변경 + 영역 중앙 배치(CSS)
 - **인스턴스(브라우저) 별명 기능**: localStorage 기반으로 추가했다가 **이후 전량 제거** (관련 코드·CSS 삭제 완료)
 
+### Phase 11 — 테마 시스템 (dark / light / neon)
+
+- `hooks/useTheme.ts` — `document.documentElement`에 `data-theme` 설정, `localStorage` 키 `linkportal-theme`, 클릭마다 dark → light → neon 순환
+- `components/ThemeToggle.tsx` — 🌙 / ☀️ / ✨ 아이콘 버튼
+- `styles/theme.css` — 테마별 CSS 변수 + 기존 `global.css` 하드코딩 색 덮어쓰기
+- `App.tsx`: 웹 헤더 우측·모바일 `.app-mobile-theme`(우상단 fixed)에 토글 배치
+- **네온**: 보라/시안/마젠타 팔레트 + `global.css` 레거시 변수(`--bg`, `--text` 등) 재정의, TreeView·Bubble·카드 글로우
+- **라이트**: 레거시 변수 재정의 + TreeView/`+` 버튼 가독성 보정 (흰 배경 위 진한 텍스트·밝은 버튼 배경)
+- **주의**: `global.css`에 `--text` 등 레거시 변수를 쓰는 선택자는 테마별로 `theme.css`에서 반드시 매핑해야 함. 미매핑 시 라이트에서 텍스트·버튼이 안 보일 수 있음.
+
+### Phase 12 — 데스크톱 2-pane 스크롤 + 트리 ⋯ 메뉴 UX
+
+- **좌·우 독립 스크롤** (`global.css`, `@media (min-width: 768px)` + `app--tree-layout`)
+  - 앱 전체: `height: 100vh/100dvh`, `overflow: hidden` — 페이지 통째 스크롤 차단
+  - **좌측**: `.tree-view__list` — `overflow-y: auto` (폴더 헤더·`+` 고정)
+  - **우측**: `.app-main > .link-drop-zone` — `overflow-y: auto` (링크 그리드·빈 화면)
+  - `overscroll-behavior: contain`, `scrollbar-gutter: stable`
+- **트리 ⋯ 메뉴** (`TreeView.tsx` + `global.css`)
+  - 항목: **↗ 이동**(accent 색), **📁 하위 폴더 추가**, **❌ 삭제**
+  - 메뉴 열림 시 `.tree-node__row--menu-open` + `z-index` — 루트·중간 폴더에서 하위 행에 가려져 이동 클릭 안 되던 문제 수정
+- **후속 개선 후보**: macOS 등에서 스크롤바 thumb/track 시각화 (`theme.css`에 width·track 미적용)
+
 ---
 
 ## 4. 디렉터리·파일 맵
@@ -136,8 +158,9 @@ src/
     useCategories.ts      # getChildCategories (sortOrder 정렬됨)
     useLinks.ts
     useMediaQuery.ts      # useIsDesktop @ 768px
+    useTheme.ts           # dark/light/neon 순환, localStorage
   components/
-    TreeView.tsx          # 웹 트리 + 행 액션 + 링크 드롭 타겟(폴더 이동)
+    TreeView.tsx          # 웹 트리 + ⋯ 메뉴(↗이동·📁하위·❌삭제) + 링크 드롭 타겟
     LinkCardList.tsx      # 링크 그리드 + 정렬·페이지네이션 + 드롭존
     LinkCard.tsx          # auto/manual 카드, ✎ × ↗, draggable
     LinkDropZone.tsx      # .url/URL 드래그 임포트 오버레이
@@ -145,10 +168,13 @@ src/
     RadialBubbleView.tsx  # 모바일 방사형
     YouTubePlayer.tsx     # YouTube 인앱 오버레이 플레이어 (+ .css)
     DragTrashZone.tsx     # 카드 드래그 중 표시되는 삭제 휴지통
+    ThemeToggle.tsx       # 테마 순환 버튼 (🌙/☀️/✨)
     InputModal.tsx        # 추가/편집/이동/확인 모달 일체
     link-list-panel.css   # 링크 목록 패널(정렬·페이지) 스타일
     drag-interactions.css # 드래그앤드롭 시각 피드백
-  styles/global.css
+  styles/
+    global.css            # 레이아웃·2-pane 독립 스크롤(데스크톱)·컴포넌트 스타일
+    theme.css             # 테마 변수·테마별 오버라이드 (global 뒤에 로드)
 public/
   favicon.svg, pwa-192.png, pwa-512.png
 scripts/
@@ -206,8 +232,19 @@ id, categoryId, url, title, imageUrl?, faviconUrl?, source: 'auto' | 'manual', c
 
 ### 카테고리 (웹 트리)
 
-- **+** (헤더/행): 하위·루트 추가
-- **✎** 이름 변경 · **↗** 상위 이동 · **×** 삭제(하위·링크 포함, 확인)
+- **+** (헤더): 루트 폴더 추가 · **⋯** (행): **↗ 이동** · **📁 하위 폴더 추가** · **❌ 삭제**
+- 폴더명 **더블클릭** → 이름 변경 (`edit-category` 모달)
+- **↗ 이동** → `MoveCategoryModal` → 다른 상위(또는 루트)로 `moveCategory()`
+
+### 데스크톱 레이아웃 (스크롤)
+
+| 영역 | 스크롤 컨테이너 | 고정 UI |
+|------|-----------------|---------|
+| 좌 (260px) | `.tree-view__list` | "폴더" 헤더, `+` |
+| 우 (flex) | `.app-main > .link-drop-zone` | 앱 헤더(LinkPortal) |
+
+- 좌·우 경계: `.tree-view` `border-right`
+- 모바일은 기존처럼 페이지/뷰 단위 스크롤
 
 ### 링크 카드
 
@@ -215,6 +252,12 @@ id, categoryId, url, title, imageUrl?, faviconUrl?, source: 'auto' | 'manual', c
 - **✎** 편집 · **×** 삭제(확인 없음) · **↗** 다른 카테고리로 이동(모달)
 - **드래그앤드롭**: 트리 폴더에 드롭 → 이동 / 휴지통(`DragTrashZone`)에 드롭 → 삭제
 - 목록: **정렬**(최신/오래된/이름순) · **페이지네이션**(12개/페이지)
+
+### 테마
+
+- 헤더(웹) 또는 우상단(모바일) **ThemeToggle** 클릭 → dark → light → neon → …
+- 선택값은 `localStorage`(`linkportal-theme`)에 저장, 새로고침 후 유지
+- 스타일 수정 시 `theme.css`의 `[data-theme='…']` 변수 + `global.css` 레거시 변수(`--bg`, `--text` 등) 매핑 여부 확인
 
 ---
 
@@ -241,7 +284,8 @@ id, categoryId, url, title, imageUrl?, faviconUrl?, source: 'auto' | 'manual', c
 | **드롭 bulk 메타 병렬화** | 링크 수십 개 전엔 순차 await로 충분 |
 | **모바일 카테고리 편집 UI** | 웹 트리에만 ✎↗× (방사형은 탐색·추가 위주) |
 | **방사형 버블 한계·임계점** | 스켈레톤 §7 보류 |
-| **외형/테마 커스터마이징** | 스켈레톤 범위 밖 |
+| **사용자 정의 테마(색상 편집기 등)** | 3프리셋(dark/light/neon)만 제공, 임의 색상 편집 UI 없음 |
+| **항상 보이는 스크롤바 UI** | 기능은 2-pane 독립 스크롤 적용됨; macOS overlay·thumb CSS 미완 |
 
 ---
 
@@ -252,6 +296,7 @@ id, categoryId, url, title, imageUrl?, faviconUrl?, source: 'auto' | 'manual', c
 - DB 이름: `LinkPortal-launcher`
 - **코드에서 seed 제거 ≠ 기존 브라우저 데이터 삭제**. 이전 dev 세션 데이터는 DevTools → Application → IndexedDB 삭제 또는 “사이트 데이터 삭제”로 비울 수 있음.
 - Local Storage의 `coderead-*` 등은 **본 앱과 무관** (같은 origin에 다른 앱 흔적).
+- 테마: `linkportal-theme` (`dark` | `light` | `neon`) — DevTools → Application → Local Storage에서 확인·삭제 가능.
 
 ### 메타데이터
 
@@ -282,14 +327,15 @@ id, categoryId, url, title, imageUrl?, faviconUrl?, source: 'auto' | 'manual', c
 ## 11. 다음 작업 후보 (개발자 참고)
 
 1. 링크 삭제 확인 모달 (현재 즉시 삭제 / 휴지통 드롭만 있음)
-2. 모바일 트리/카테고리 편집 parity (드래그앤드롭은 데스크톱 중심)
-3. 방사형 버블 수 제한 + drill-down 정책
-4. 링크 편집 시 URL 변경 → 메타 재수집 옵션
-5. OG 프록시 (별도 서비스 설계 후)
-6. `App.tsx` 훅/모듈 분리 (기능 안정 후)
+2. **데스크톱 스크롤바 track/thumb 시각화** (좌·우 패널)
+3. 모바일 트리/카테고리 편집 parity (드래그앤드롭은 데스크톱 중심)
+4. 방사형 버블 수 제한 + drill-down 정책
+5. 링크 편집 시 URL 변경 → 메타 재수집 옵션
+6. OG 프록시 (별도 서비스 설계 후)
+7. `App.tsx` 훅/모듈 분리 (기능 안정 후)
 
-> **완료된 이전 후보:** YouTube 인앱 재생, 링크 드래그앤드롭(이동·삭제), 목록 정렬·페이지네이션
+> **완료된 이전 후보:** YouTube 인앱 재생, 링크 드래그앤드롭(이동·삭제), 목록 정렬·페이지네이션, 3테마(dark/light/neon), 데스크톱 좌·우 독립 스크롤, 트리 ⋯ 메뉴(이동 z-index)
 
 ---
 
-*문서 작성 기준: 저장소 `2606_bookOff` / 앱 표시명 LinkPortal / 패키지명 `LinkPortal-launcher`*
+*문서 작성 기준: 저장소 `260606_LinkPortal` / 앱 표시명 LinkPortal / 패키지명 `LinkPortal-launcher`*
