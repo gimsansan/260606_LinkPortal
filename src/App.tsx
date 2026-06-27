@@ -482,6 +482,7 @@ export function App() {
           aria-label="홈으로 이동"
           title="홈으로 이동"
         >
+          <img src="/linking.png" alt="" className="app-header__logo-icon" aria-hidden="true" />
           링크함
         </button>
         {searchOpen && (
