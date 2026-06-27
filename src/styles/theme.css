@@ -52,6 +52,9 @@
   --header-bg: #0d1117;
   --scrollbar-thumb: rgba(255, 255, 255, 0.15);
   --empty-state-color: rgba(255, 255, 255, 0.5);
+
+  --radius: 16px;
+  --font: 'Segoe UI', system-ui, -apple-system, sans-serif;
 }
 
 /* ── Light ── */
@@ -160,58 +163,6 @@
   --empty-state-color: rgba(0, 255, 255, 0.6);
 }
 
-/* ── Crimson (와인 차콜 + 크림슨 레드) — 강렬하고 묵직한 무드 ── */
-[data-theme='crimson'] {
-  --bg: #1a1012;
-  --bg-elevated: #241619;
-  --surface: #2c1a1e;
-  --accent: #e23b4e;
-  --accent-soft: rgba(226, 59, 78, 0.15);
-  --text: #f2e4e6;
-
-  --bg-app: #1a1012;
-  --bg-sidebar: #211417;
-  --bg-card: #241619;
-  --bg-card-hover: #321d22;
-  --bg-panel: rgba(226, 59, 78, 0.04);
-  --bg-toolbar: rgba(226, 59, 78, 0.04);
-  --bg-input: #241619;
-  --bg-modal: #241619;
-  --bg-modal-overlay: rgba(15, 6, 8, 0.78);
-
-  --text-primary: #f2e4e6;
-  --text-secondary: rgba(242, 228, 230, 0.75);
-  --text-muted: rgba(242, 228, 230, 0.45);
-  --text-placeholder: rgba(242, 228, 230, 0.3);
-
-  --border: rgba(226, 59, 78, 0.25);
-  --border-hover: rgba(226, 59, 78, 0.45);
-  --border-active: rgba(226, 59, 78, 0.6);
-
-  --accent: #e23b4e;
-  --accent-hover: #f25767;
-  --accent-muted: rgba(226, 59, 78, 0.16);
-
-  --danger: rgba(255, 90, 70, 0.22);
-  --danger-border: rgba(255, 90, 70, 0.5);
-  --danger-hover: rgba(255, 90, 70, 0.45);
-
-  --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.4);
-  --shadow-card-hover: 0 4px 14px rgba(0, 0, 0, 0.5);
-  --shadow-modal: 0 8px 32px rgba(0, 0, 0, 0.6);
-
-  --sort-bg: rgba(226, 59, 78, 0.08);
-  --sort-active: rgba(226, 59, 78, 0.18);
-  --page-num-active: rgba(226, 59, 78, 0.18);
-
-  --glow: none;
-  --glow-text: none;
-
-  --header-bg: #1a1012;
-  --scrollbar-thumb: rgba(226, 59, 78, 0.3);
-  --empty-state-color: rgba(242, 228, 230, 0.5);
-}
-
 /* ══════════════════════════════════════
    변수 적용 — 기존 CSS 덮어쓰기
    ══════════════════════════════════════ */
@@ -234,18 +185,9 @@ body {
 }
 
 /* ── 사이드바 (TreeView) ── */
-.tree-sidebar,
 .tree-view {
   background: var(--bg-sidebar);
   border-right: 1px solid var(--border);
-}
-
-.tree-node__label {
-  color: var(--text-primary);
-}
-
-.tree-node--selected > .tree-node__row {
-  background: var(--accent-muted);
 }
 
 /* ══════════════════════════════════════
@@ -383,6 +325,11 @@ body {
   color: #00ffff;
 }
 
+[data-theme='neon'] .global-search-results {
+  border-color: rgba(0, 255, 255, 0.3);
+  box-shadow: 0 4px 20px rgba(0, 255, 255, 0.15);
+}
+
 /* ── TreeView ── */
 [data-theme='neon'] .tree-view {
   border-right-color: rgba(255, 0, 255, 0.25);
@@ -449,12 +396,6 @@ body {
 
 [data-theme='neon'] .link-card__author {
   color: #88d8e8;
-}
-
-[data-theme='neon'] .link-card__badge {
-  background: rgba(255, 0, 255, 0.25);
-  color: #ff88ff;
-  text-shadow: 0 0 6px rgba(255, 0, 255, 0.5);
 }
 
 [data-theme='neon'] .link-card__favicon-placeholder {
@@ -599,38 +540,6 @@ body {
   box-shadow: 0 0 12px rgba(0, 255, 255, 0.25);
 }
 
-[data-theme='neon'] .drag-trash {
-  border-color: rgba(255, 0, 100, 0.7);
-  color: rgba(255, 150, 200, 0.9);
-  box-shadow: 0 0 20px rgba(255, 0, 100, 0.3);
-}
-
-[data-theme='neon'] .drag-trash--hover {
-  border-color: rgba(255, 0, 100, 1);
-  box-shadow: 0 0 30px rgba(255, 0, 100, 0.5);
-}
-
-/* ══════════════════════════════════════
-   Crimson 전용 — 폴더/제목 색 보정
-   ══════════════════════════════════════ */
-
-[data-theme='crimson'] .tree-node__folder,
-[data-theme='crimson'] .tree-node__row--selected .tree-node__folder {
-  color: #f25767;
-}
-
-[data-theme='crimson'] .tree-node__row--selected {
-  background: rgba(226, 59, 78, 0.16);
-}
-
-[data-theme='crimson'] .tree-node__row:hover {
-  background: rgba(226, 59, 78, 0.08);
-}
-
-[data-theme='crimson'] .link-list__title {
-  color: #f25767;
-}
-
 /* ── 패널/툴바 ── */
 .link-list__panel {
   border-color: var(--border);
@@ -699,16 +608,6 @@ body {
 /* ── 빈 상태 ── */
 .empty-state {
   color: var(--empty-state-color);
-}
-
-/* ── 휴지통 ── */
-.drag-trash {
-  background: var(--danger);
-  border-color: var(--danger-border);
-}
-
-.drag-trash--hover {
-  background: var(--danger-hover);
 }
 
 /* ── 버튼 공통 ── */

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import type { LinkItem } from '../types';
-import { launchUrl, extractYouTubeVideoId } from '../services/url';
+import { launchUrl, extractYouTubeVideoId, getDomainAvatar } from '../services/url';
 import { buildLinkDragPayload, LINK_DRAG_TYPE } from '../services/linkDrag';
 
 interface LinkCardProps {
@@ -35,6 +35,7 @@ export function LinkCard({
   const [faviconFailed, setFaviconFailed] = useState(false);
   const isAuto = link.source === 'auto';
   const isYouTube = !!extractYouTubeVideoId(link.url);
+  const domainAvatar = getDomainAvatar(link.url);
 
   useEffect(() => {
     setFaviconFailed(false);
@@ -99,7 +100,12 @@ export function LinkCard({
                 onError={() => setFaviconFailed(true)}
               />
             ) : (
-              <span className="link-card__favicon-placeholder">🔗</span>
+              <span
+                className="link-card__favicon-placeholder"
+                style={{ background: domainAvatar.color, color: '#fff' }}
+              >
+                {domainAvatar.letter}
+              </span>
             )}
           </div>
         )}

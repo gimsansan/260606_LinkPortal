@@ -7,12 +7,16 @@ export interface ToastItem {
   message: string;
   duration: number;
   variant: ToastVariant;
+  actionLabel?: string;
+  onAction?: () => void;
 }
 
 interface QueuedToast {
   message: string;
   duration: number;
   variant: ToastVariant;
+  actionLabel?: string;
+  onAction?: () => void;
 }
 
 export function useToast() {
@@ -38,8 +42,14 @@ export function useToast() {
   }, []);
 
   const showToast = useCallback(
-    (message: string, duration = 1000, variant: ToastVariant = 'default') => {
-      queueRef.current.push({ message, duration, variant });
+    (
+      message: string,
+      duration = 1000,
+      variant: ToastVariant = 'default',
+      actionLabel?: string,
+      onAction?: () => void,
+    ) => {
+      queueRef.current.push({ message, duration, variant, actionLabel, onAction });
       processQueue();
     },
     [processQueue],

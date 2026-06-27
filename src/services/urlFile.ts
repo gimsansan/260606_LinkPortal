@@ -1,4 +1,4 @@
-import { isValidUrl } from './url';
+import { isValidUrl, normalizeUrl } from './url';
 
 export interface ParsedUrlFile {
   url: string;
@@ -10,7 +10,7 @@ export function parseUrlFileContent(content: string, filename?: string): ParsedU
   const urlMatch = content.match(/^URL=(.+)$/im);
   if (!urlMatch) return null;
 
-  const url = urlMatch[1].trim();
+  const url = normalizeUrl(urlMatch[1]);
   if (!isValidUrl(url)) return null;
 
   const title = titleFromUrlFilename(filename) ?? url;

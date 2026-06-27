@@ -84,10 +84,11 @@ export function AddLinkModal({ onSubmit, onClose }: AddLinkModalProps) {
         <h3 className="modal__title">링크 추가</h3>
         <input
           className="modal__input"
-          type="url"
+          type="text"
+          inputMode="url"
           value={url}
           onChange={(e) => setUrl(e.target.value)}
-          placeholder="https://..."
+          placeholder="naver.com 또는 https://..."
           autoFocus
           required
         />
@@ -97,7 +98,7 @@ export function AddLinkModal({ onSubmit, onClose }: AddLinkModalProps) {
             checked={useManual}
             onChange={(e) => setUseManual(e.target.checked)}
           />
-          수제 카드 (제목 수동 입력)
+          제목 수동 입력
         </label>
         {useManual && (
           <input
@@ -144,10 +145,11 @@ export function EditLinkModal({ link, onSubmit, onClose }: EditLinkModalProps) {
         <h3 className="modal__title">링크 편집</h3>
         <input
           className="modal__input"
-          type="url"
+          type="text"
+          inputMode="url"
           value={url}
           onChange={(e) => setUrl(e.target.value)}
-          placeholder="https://..."
+          placeholder="naver.com 또는 https://..."
           required
         />
         <input

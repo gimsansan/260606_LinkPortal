@@ -234,3 +234,54 @@ export async function moveLinks(linkIds: string[], newCategoryId: string): Promi
 export async function seedIfEmpty(): Promise<void> {
   return;
 }
+
+// ── 백업/복원 ─────────────────────────────────────────
+// 백업 파일 포맷 버전. 나중에 스키마가 바뀌면 올려서 마이그레이션 분기 가능.
+const BACKUP_VERSION = 1;
+
+// 내보내기/가져오기로 주고받는 JSON 한 덩어리의 형태.
+// app 필드로 "이게 LinkPortal 백업인지" 검증한다.
+export interface BackupPayload {
+  app: 'LinkPortal';
+  version: number;
+  exportedAt: number;
+  categories: Category[];
+  links: LinkItem[];
+}
+
+// 현재 DB의 폴더·링크를 통째로 읽어 백업 객체로 반환.
+// categories와 links를 Promise.all로 동시에 읽어 약간 더 빠르게.
+export async function exportData(): Promise<BackupPayload> {
+  const [categories, links] = await Promise.all([
+    db.categories.toArray(),
+    db.links.toArray(),
+  ]);
+  return { app: 'LinkPortal', version: BACKUP_VERSION, exportedAt: Date.now(), categories, links };
+}
+
+// replace = 기존 전부 지우고 백업으로 교체 / merge = 기존 유지하고 얹기(같은 id는 갱신)
+export type ImportMode = 'replace' | 'merge';
+
+export async function importData(
+  payload: BackupPayload,
+  mode: ImportMode = 'merge',
+): Promise<void> {
+  // 잘못된/남의 JSON을 그대로 밀어넣어 DB가 깨지는 걸 막는 최소 검증.
+  if (
+    payload?.app !== 'LinkPortal' ||
+    !Array.isArray(payload.categories) ||
+    !Array.isArray(payload.links)
+  ) {
+    throw new Error('유효하지 않은 백업 파일입니다.');
+  }
+  // 트랜잭션으로 묶어 도중 실패 시 전체 롤백 → 반쯤 적용된 깨진 상태 방지.
+  await db.transaction('rw', db.categories, db.links, async () => {
+    if (mode === 'replace') {
+      await db.categories.clear();
+      await db.links.clear();
+    }
+    // bulkPut: id가 같으면 덮어쓰고, 없으면 새로 추가.
+    await db.categories.bulkPut(payload.categories);
+    await db.links.bulkPut(payload.links);
+  });
+}

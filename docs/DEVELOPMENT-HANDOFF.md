@@ -1,7 +1,11 @@
-# LinkPortal Launcher — 개발 인계 문서
+# 링크함 — 개발 인계 문서
 
 > URL 바로가기(.url) 컬렉션 PWA. 원본 기획은 `project-skeleton.md`(외부 인계 문서)를 참고.
 > 이 문서는 **현재 코드베이스까지의 구현 과정·결정·미완 항목**을 개발자에게 넘기기 위한 기록이다.
+>
+> **표시명 vs 내부명**
+> - **사용자에게 보이는 이름:** **링크함** — `index.html` `<title>`, PWA manifest(`vite.config.ts`), 헤더 로고(`App.tsx`)
+> - **내부 식별자(변경하지 않음):** IndexedDB `LinkPortal-launcher`, 백업 JSON `app: 'LinkPortal'`, npm 패키지 `LinkPortal-launcher`, localStorage·드래그 타입 등 `linkportal-*` 키
 >
 > **용어 메모:** 내부 코드·DB는 여전히 `category`(카테고리)지만, **UI 표시 텍스트는 "폴더"** 로 통일됨. 이 문서는 코드 기준으로 `카테고리`를 사용한다.
 
@@ -13,9 +17,9 @@
 |------|------|
 | **재생이 아닌 접속** | 미디어 추출 없음. `launchUrl()` → `window.open` (단, **YouTube는 인앱 오버레이 재생** — §3 Phase 7) |
 | **인증은 대상 사이트에 위임** | iframe 로그인·자격증명 저장 없음 |
-| **로컬 PWA** | IndexedDB(Dexie), 기기별 데이터 |
+| **로컬 PWA** | IndexedDB(Dexie), 기기별 데이터. **JSON 백업·복원** (헤더 ⬇⬆) |
 | **구조 커스터마이징** | 카테고리 트리 생성·이름변경·이동(메뉴)·삭제, 링크 편집·이동(버튼 + **드래그앤드롭**) |
-| **외형 커스터마이징** | **4테마** (dark / light / neon / crimson). 테마 선택은 `linkportal-theme`에 저장 |
+| **외형 커스터마이징** | **3테마** (dark / light / neon). 테마 선택은 `linkportal-theme`에 저장 |
 | **데스크톱 전용** | 모바일 전용 Radial Bubble 화면 제거. 화면 폭이 좁아져도 `TreeView + LinkCardList` 유지 |
 
 ---
@@ -101,10 +105,10 @@ PWA 아이콘 재생성: `scripts/generate-pwa-icons.ps1` → `public/pwa-192.pn
 
 - UI **"폴더"** 통일, 인스턴스 별명 기능 제거
 
-### Phase 11 — 테마 (dark / light / neon / crimson)
+### Phase 11 — 테마 (dark / light / neon)
 
 - `useTheme.ts`, `ThemeToggle`, `theme.css`
-- 현재 `useTheme.ts`는 `dark → light → neon → crimson` 순환
+- 현재 `useTheme.ts`는 `dark → light → neon` 순환
 
 ### Phase 12 — 데스크톱 2-pane 스크롤 + 트리 ⋯ 메뉴
 
@@ -170,27 +174,76 @@ PWA 아이콘 재생성: `scripts/generate-pwa-icons.ps1` → `public/pwa-192.pn
    - `nextDefaultFolderTitle`의 `useMemo`를 `if (!ready) return ...` 위로 이동
    - 관련 메모: `docs/REACT-HOOKS-EARLY-RETURN.md`
 
+### Phase 17 — JSON 백업·복원 (2026-06)
+
+1. **DB 계층** (`db/index.ts`)
+   - `exportData()` — categories + links 전체를 `BackupPayload` JSON으로 반환
+   - `importData(payload, mode)` — `merge`(기본, 같은 id 덮어쓰기) / `replace`(전체 교체)
+   - `payload.app === 'LinkPortal'` 검증, Dexie 트랜잭션 + `bulkPut`
+2. **서비스 계층** (`services/backup.ts`)
+   - `downloadBackup()` — Blob + `<a download>`로 `linkportal-backup-YYYY-MM-DD.json` 저장
+   - `readBackupFile(file, mode)` — File → JSON parse → `importData` 위임
+3. **UI** (`App.tsx`, `global.css`)
+   - 헤더 `.app-header__actions`: ⬇ 내보내기 · ⬆ 가져오기(숨은 file input) · `ThemeToggle`
+   - 토스트: `백업을 내보냈어요` / `가져오기 완료` / `가져오기 실패 — 파일 확인`
+
+### Phase 18 — 표시명·내비게이션 UX (2026-06)
+
+1. **앱 표시명 → 링크함**
+   - `App.tsx` 헤더 로고 버튼 텍스트
+   - `index.html` `<title>`, `vite.config.ts` PWA `name` / `short_name`
+   - **내부 DB명·백업 `app` 필드·npm 패키지명은 `LinkPortal*` 유지** (기존 데이터·백업 호환)
+2. **로고 클릭 = 홈** (`App.tsx` `handleGoHome`)
+   - `🧺 링크 바구니`(없으면 첫 루트)로 이동
+   - 전역 검색(`useGlobalSearch`) 초기화·검색 UI 닫기
+   - YouTube 오버레이 닫기
+3. **검색 역할 분리**
+   - **전역 검색** — 헤더 🔍, 모든 링크 + 폴더 경로. 결과 클릭 시 해당 폴더 이동
+   - **폴더 검색** — `LinkCardList` 툴바, 현재 폴더만. **`categoryTitle` 변경 시 `query` 자동 초기화**
+
+### Phase 19 — YouTube 랜덤 재생 (2026-06)
+
+1. **셔플 유틸** (`src/utils/shuffle.ts`)
+   - Fisher–Yates `shuffleArray<T>()` — 원본 배열 불변
+2. **재생 플레이리스트** (`App.tsx`)
+   - `youtubePlaylist`: 현재 폴더 YouTube 링크, `createdAt` **내림차순** (재생 기본 순서)
+   - `isShuffled`, `shuffledPlaylist`, `activePlaylist` — OFF면 원본, ON이면 셔플본을 `YouTubePlayer`에 전달
+   - **`activeCategoryId` 변경 시** `isShuffled`·`shuffledPlaylist` 리셋
+3. **동작 규칙**
+   - **OFF → ON**: 매번 새로 섞음. 재생 중이면 `playingLink`를 0번에 고정하고 나머지만 섞음 (Spotify 패턴)
+   - **ON → OFF**: `youtubePlaylist` 원본 순서로 다음 곡 계산
+   - **전체 재생 + ON**: 전체 셔플 후 첫 곡 재생
+   - **전체 재생 + OFF**: `youtubePlaylist[0]` (최근 추가순 첫 곡)
+4. **UI** (`LinkCardList.tsx`, `link-list-panel.css`)
+   - 툴바 **랜덤 재생** 토글 (자동 넘김 옆). `autoAdvance`와 동일한 스위치 스타일
+   - **목록 정렬**(최근 추가순 / 이름순)과 **재생 순서**는 분리 — 이름순은 `title` `localeCompare('ko')` **표시 전용**
+
 ---
 
 ## 4. 디렉터리·파일 맵
 
 ```
 src/
-  App.tsx                 # 데스크톱 전용 레이아웃, 상태·모달·드롭존·정리 미션·토스트·자동 폴더 선택·폴더 기본명 계산
+  App.tsx                 # 데스크톱 전용 레이아웃, 상태·모달·드롭존·정리 미션·토스트·백업·홈(로고)·전역 검색
   main.tsx
   types/index.ts
-  db/index.ts             # CRUD, INBOX_TITLE, authorName 저장, moveLinks, deleteLinks, 기본 폴더명 카운팅
+  db/index.ts             # CRUD, INBOX_TITLE, authorName 저장, moveLinks, deleteLinks, exportData/importData, 기본 폴더명 카운팅
   services/
     url.ts, metadata.ts, urlFile.ts, dropImport.ts
     linkDrag.ts           # LINK_DRAG_TYPE, parse/build payload (다중)
     missions.ts           # 정리 카운트
+    backup.ts             # downloadBackup, readBackupFile
+  utils/
+    shuffle.ts            # Fisher–Yates (YouTube 랜덤 재생)
   hooks/
-    useCategories.ts, useLinks.ts, useInstantDelete.ts
-    useTheme.ts           # dark/light/neon/crimson 순환
+    useCategories.ts, useLinks.ts
+    useGlobalSearch.ts    # 헤더 전역 링크 검색
+    useAutoAdvance.ts     # YouTube 연속 재생
+    useTheme.ts           # dark/light/neon 순환
     useToast.ts           # 토스트 큐
   components/
     TreeView.tsx          # 트리 + 링크 드롭 타겟 (폴더 드래그 없음)
-    LinkCardList.tsx      # 그리드, 검색·정렬·페이지, 마quee 다중 선택, 바로 삭제 토글
+    LinkCardList.tsx      # 그리드, 폴더 검색·정렬·페이지, 마quee 다중 선택, 랜덤 재생 토글
     LinkCard.tsx          # 클릭 선택, 더블클릭 열기, draggable, selected 상태, favicon fallback
     LinkDropZone.tsx      # .url/URL 드롭 오버레이
     EmptyDropPanel.tsx
@@ -243,6 +296,22 @@ id, categoryId, url, title, imageUrl?, faviconUrl?, authorName?, source: 'auto' 
 - 삭제: 해당 부모 형제 `0..n-1` 재정렬
 - `moveCategory`: 순환 방지, 이전 부모 renormalize
 
+### BackupPayload (`exportData` / `importData`)
+
+```ts
+{
+  app: 'LinkPortal',
+  version: 1,
+  exportedAt: number,
+  categories: Category[],
+  links: LinkItem[],
+}
+```
+
+- **merge**(기본): `bulkPut` — 같은 `id`는 덮어쓰기, 백업에 없는 기존 레코드는 유지
+- **replace**: `clear()` 후 백업으로 전면 교체
+- 잘못된 JSON(`{}`, `[]`, 깨진 텍스트 등)은 검증/`JSON.parse` 단계에서 거부
+
 ---
 
 ## 6. 주요 사용자 플로우
@@ -257,21 +326,42 @@ id, categoryId, url, title, imageUrl?, faviconUrl?, authorName?, source: 'auto' 
 
 - 클릭: 선택/해제
 - 더블클릭: YouTube → 인앱 / 그 외 → `launchUrl`
-- **×** 삭제(기본 확인, `바로 삭제` ON이면 즉시) · **↗** 이동 · **✎** 편집
+- **×** 삭제(즉시 실행, 토스트 **되돌리기**로 복구) · **↗** 이동 · **✎** 편집
 - **드래그**: 트리 폴더에 드롭 → 이동 (다중 선택 시 일괄)
 - **다중 선택**: 빈 공간 영역 드래그 · 카드 클릭 토글 · 바깥 클릭 해제
-- **검색**: 링크 목록 툴바에서 제목·채널명·URL 기준 필터링. 검색 결과 기준으로 페이지네이션
+- **검색**
+  - **전역**(헤더 🔍): 모든 폴더 링크, 폴더 경로 표시. 로고(홈) 클릭 시 초기화
+  - **폴더**(`LinkCardList`): 현재 폴더만. 폴더 이동 시 검색어 자동 초기화
 - **favicon fallback**: 외부 사이트 `/favicon.ico` 로드 실패 시 `🔗` placeholder 표시
+
+### YouTube 재생
+
+- **플레이리스트** (`App.tsx` `youtubePlaylist`): 현재 폴더 embeddable YouTube, `createdAt` 내림차순
+- **다음 곡** (`YouTubePlayer.tsx`): `playlist`에서 `link.id` 기준 `findIndex` + 1. `onPlayLink`로 전환
+- **자동 넘김** (`useAutoAdvance`, `linkportal-auto-advance` localStorage)
+- **랜덤 재생** (`App.tsx` `handleShuffleChange`, `handlePlayAll`)
+  - OFF: `youtubePlaylist` 원본
+  - ON: `shuffledPlaylist` → `activePlaylist`로 플레이어에 전달
+  - 폴더(`activeCategoryId`) 변경 시 OFF 리셋
+  - 셔플 상태는 **세션만** (localStorage 미사용)
 
 ### 정리 미션
 
 - **대상**: `🧺 링크 바구니` → 다른 폴더로 이동할 때만 카운트
 - **토스트**: `정리 완료!` → (바구니 0이면) `바구니 클리어`
-- 테마 전환은 `dark → light → neon → crimson` 순환
+- 테마 전환은 `dark → light → neon` 순환
+
+### 백업·복원
+
+- **⬇ 내보내기** — `linkportal-backup-YYYY-MM-DD.json` (들여쓰기 JSON, `BackupPayload`)
+- **⬆ 가져오기** — 숨은 file input, 기본 **merge**. 복원 후 `refreshAll()`로 화면 갱신
+- merge는 같은 `id`만 덮어씀. 백업 이후 새로 만든 폴더(id 다름)는 그대로 남음
+- 동일 백업을 두 번 올려도 id 중복 덮어쓰기라 레코드 수는 늘지 않음
 
 ### 데스크톱 시작
 
 - `navStack` 비어 있고 폴더 있으면 → 인박스 또는 첫 루트 **자동 선택**
+- **헤더 로고(링크함) 클릭** → 인박스(홈) + 전역 검색·플레이어 초기화
 - 폴더 0개 → `EmptyDropPanel` 안내
 - 모바일 전용 화면 없음. 좁은 웹뷰에서도 같은 2-pane 레이아웃 유지
 
@@ -294,8 +384,8 @@ id, categoryId, url, title, imageUrl?, faviconUrl?, authorName?, source: 'auto' 
 | `add-link` | 링크 추가 |
 | `edit-link` | URL·제목 편집 |
 | `move-link` | 링크 폴더 이동 |
-| `confirm-delete-link` | 링크 1개 삭제 확인 |
-| `confirm-delete-page-links` | 현재 페이지 링크 일괄 삭제 확인 |
+
+(링크 삭제는 모달 없이 즉시 실행 + 토스트 되돌리기. 폴더 삭제만 `confirm-delete-category`.)
 
 ---
 
@@ -308,7 +398,7 @@ id, categoryId, url, title, imageUrl?, faviconUrl?, authorName?, source: 'auto' 
 | **헤더 바구니 카운터 pop** | 제거. 토스트 미션으로 대체 |
 | **OG 프록시** | 로컬 PWA 정체성 |
 | **모바일 전용 UI** | 앱 전제를 데스크톱 전용으로 확정. Radial Bubble 제거 |
-| **임의 색상 테마 편집** | 4프리셋만 |
+| **임의 색상 테마 편집** | 3프리셋만 |
 | **항상 보이는 스크롤바 UI** | 기능만 적용, thumb CSS 미완 |
 
 ---
@@ -324,9 +414,9 @@ id, categoryId, url, title, imageUrl?, faviconUrl?, authorName?, source: 'auto' 
 
 | 키 | 값 |
 |----|-----|
-| `linkportal-theme` | `dark` \| `light` \| `neon` \| `crimson` |
+| `linkportal-theme` | `dark` \| `light` \| `neon` |
 | `linkportal-organize-count` | 바구니→폴더 이동 누적 수 |
-| `linkportal-instant-delete` | `true`면 확인 모달 없이 링크 삭제 |
+| `linkportal-auto-advance` | YouTube 연속 재생 ON/OFF |
 
 ### 드래그 payload (`linkDrag.ts`)
 
@@ -360,8 +450,8 @@ id, categoryId, url, title, imageUrl?, faviconUrl?, authorName?, source: 'auto' 
 5. 좁은 웹뷰 최소 폭/가로 스크롤 정책
 6. `App.tsx` 훅/모듈 분리
 
-> **완료된 이전 후보:** YouTube 인앱, 링크 DnD, 정렬·페이지네이션, 링크 검색, 4테마, 2-pane 스크롤, 트리 ⋯, 통합 드롭존, 다중 선택, 삭제 확인, 바로 삭제 토글, 정리 미션·토스트, 인박스 리네임, 폴더 추가 기본 emoji, 폴더명 카운팅, favicon 실패 fallback, 데스크톱 전용 단순화, YouTube 채널명 표시
+> **완료된 이전 후보:** YouTube 인앱, 링크 DnD, 정렬·페이지네이션, 링크 검색, 3테마, 2-pane 스크롤, 트리 ⋯, 통합 드롭존, 다중 선택, 삭제·되돌리기 토스트, 정리 미션·토스트, 인박스 리네임, 폴더 추가 기본 emoji, 폴더명 카운팅, favicon 실패 fallback, 데스크톱 전용 단순화, YouTube 채널명 표시, JSON 백업·복원, 표시명 링크함, 로고 홈·검색 UX, **YouTube 랜덤 재생**
 
 ---
 
-*문서 작성 기준: 저장소 `260606_LinkPortal` / 앱 표시명 LinkPortal / 패키지명 `LinkPortal-launcher`*
+*문서 작성 기준: 저장소 `2606_LinkPortal` / **앱 표시명 링크함** / 내부 DB·패키지 `LinkPortal-launcher`*

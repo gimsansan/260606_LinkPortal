@@ -1,6 +1,7 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import type { LinkItem } from './types';
 import {
+  db,
   seedIfEmpty,
   createCategory,
   createLink,
@@ -24,12 +25,15 @@ import {
 import { useCategories } from './hooks/useCategories';
 import { useLinks } from './hooks/useLinks';
 import { useTheme } from './hooks/useTheme';
-import { useInstantDelete } from './hooks/useInstantDelete';
+import { useAutoAdvance } from './hooks/useAutoAdvance';
 import { useToast } from './hooks/useToast';
+import { useGlobalSearch } from './hooks/useGlobalSearch';
 import { parseLinkDragPayload } from './services/linkDrag';
 import { recordInboxOrganize } from './services/missions';
 import { fetchLinkMetadata } from './services/metadata';
-import { isValidUrl, getFaviconUrl, extractYouTubeVideoId } from './services/url';
+import { downloadBackup, readBackupFile } from './services/backup';
+import { isValidUrl, normalizeUrl, getFaviconUrl, extractYouTubeVideoId } from './services/url';
+import { shuffleArray } from './utils/shuffle';
 import { TreeView } from './components/TreeView';
 import { LinkCardList } from './components/LinkCardList';
 import { EmptyDropPanel } from './components/EmptyDropPanel';
@@ -56,13 +60,11 @@ type ModalState =
   | { type: 'move-link'; link: LinkItem }
   | { type: 'edit-link'; link: LinkItem }
   | { type: 'confirm-delete-category'; id: string; title: string }
-  | { type: 'confirm-delete-link'; id: string; title: string }
-  | { type: 'confirm-delete-page-links'; ids: string[]; count: number }
   | null;
 
 export function App() {
   const { theme, cycleTheme } = useTheme();
-  const { instantDelete, setInstantDelete } = useInstantDelete();
+  const { autoAdvance, setAutoAdvance } = useAutoAdvance();
   const { toast, showToast } = useToast();
   const [ready, setReady] = useState(false);
   const [navStack, setNavStack] = useState<string[]>([]);
@@ -79,15 +81,32 @@ export function App() {
   );
 
   const [playingLink, setPlayingLink] = useState<LinkItem | null>(null);
+  const [isShuffled, setIsShuffled] = useState(false);
+  const [shuffledPlaylist, setShuffledPlaylist] = useState<LinkItem[]>([]);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const { query, setQuery, results, clearSearch } = useGlobalSearch(allCategories);
 
   const youtubePlaylist = useMemo(
-    () => links.filter((l) => !!extractYouTubeVideoId(l.url)),
+    () =>
+      links
+        .filter((l) => !!extractYouTubeVideoId(l.url))
+        .sort((a, b) => b.createdAt - a.createdAt),
     [links],
   );
 
   useEffect(() => {
     seedIfEmpty().then(() => setReady(true));
   }, []);
+
+  useEffect(() => {
+    setIsShuffled(false);
+    setShuffledPlaylist([]);
+  }, [activeCategoryId]);
+
+  const activePlaylist = useMemo(
+    () => (isShuffled && shuffledPlaylist.length > 0 ? shuffledPlaylist : youtubePlaylist),
+    [isShuffled, shuffledPlaylist, youtubePlaylist],
+  );
 
   const refreshAll = useCallback(async () => {
     await refreshCategories();
@@ -112,6 +131,30 @@ export function App() {
     [showToast],
   );
 
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleExport = async () => {
+    try {
+      await downloadBackup();
+      showToast('백업을 내보냈어요', 1500);
+    } catch {
+      showToast('내보내기 실패', 1500);
+    }
+  };
+
+  const handleImportFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    try {
+      await readBackupFile(file, 'merge');
+      await refreshAll();
+      showToast('가져오기 완료', 1500);
+    } catch {
+      showToast('가져오기 실패 — 파일 확인', 1800);
+    }
+  };
+
   useEffect(() => {
     if (ready) refreshAll();
   }, [ready, currentParentId, refreshAll]);
@@ -127,6 +170,27 @@ export function App() {
     }
     setNavStack(path);
   }, []);
+
+  const handleGoHome = useCallback(async () => {
+    clearSearch();
+    setSearchOpen(false);
+    setPlayingLink(null);
+
+    const inbox = await getInboxCategory();
+    if (inbox) {
+      await selectCategoryById(inbox.id);
+      return;
+    }
+    const roots = allCategories
+      .filter((c) => c.parentId === null)
+      .sort((a, b) => a.sortOrder - b.sortOrder);
+    const firstRoot = roots[0];
+    if (firstRoot) {
+      await selectCategoryById(firstRoot.id);
+    } else {
+      setNavStack([]);
+    }
+  }, [allCategories, clearSearch, selectCategoryById]);
 
   useEffect(() => {
     if (!ready || navStack.length > 0 || allCategories.length === 0) return;
@@ -185,39 +249,40 @@ export function App() {
     url: string,
     options?: AddLinkOptions,
   ) => {
-    if (!isValidUrl(url)) return;
+    const normalizedUrl = normalizeUrl(url);
+    if (!isValidUrl(normalizedUrl)) return;
 
     const titleOverride = options?.titleOverride?.trim();
     const forceManual = options?.forceManual;
 
     if (forceManual) {
       await createLink(categoryId, {
-        url,
-        title: titleOverride || url,
+        url: normalizedUrl,
+        title: titleOverride || normalizedUrl,
         source: 'manual',
-        faviconUrl: getFaviconUrl(url),
+        faviconUrl: getFaviconUrl(normalizedUrl),
       });
       return;
     }
 
     if (titleOverride) {
-      const meta = await fetchLinkMetadata(url);
+      const meta = await fetchLinkMetadata(normalizedUrl);
       const hasRichMeta = meta.imageUrl != null;
       await createLink(categoryId, {
-        url,
+        url: normalizedUrl,
         title: titleOverride,
         imageUrl: meta.imageUrl,
-        faviconUrl: meta.faviconUrl ?? getFaviconUrl(url),
+        faviconUrl: meta.faviconUrl ?? getFaviconUrl(normalizedUrl),
         source: hasRichMeta ? 'auto' : 'manual',
         authorName: meta.authorName,
       });
       return;
     }
 
-    const meta = await fetchLinkMetadata(url);
+    const meta = await fetchLinkMetadata(normalizedUrl);
     const hasRichMeta = meta.imageUrl != null;
     await createLink(categoryId, {
-      url,
+      url: normalizedUrl,
       title: meta.title,
       imageUrl: meta.imageUrl,
       faviconUrl: meta.faviconUrl,
@@ -248,52 +313,42 @@ export function App() {
   const executeDeleteLinks = useCallback(
     async (ids: string[]) => {
       if (ids.length === 0) return;
+      const snapshot = links.filter((l) => ids.includes(l.id));
       if (ids.length === 1) {
         await deleteLink(ids[0]);
       } else {
         await deleteLinks(ids);
       }
       await refreshAll();
+      showToast(
+        `${ids.length}개 삭제됨`,
+        5000,
+        'default',
+        '되돌리기',
+        () => {
+          void db.links.bulkPut(snapshot).then(refreshAll);
+        },
+      );
     },
-    [refreshAll],
+    [links, refreshAll, showToast],
   );
 
   const handleRequestDeleteLink = (id: string) => {
-    if (instantDelete) {
-      void executeDeleteLinks([id]);
-      return;
-    }
-    const link = links.find((l) => l.id === id);
-    if (link) setModal({ type: 'confirm-delete-link', id, title: link.title });
-  };
-
-  const handleConfirmDeleteLink = async () => {
-    if (modal?.type !== 'confirm-delete-link') return;
-    await executeDeleteLinks([modal.id]);
-    setModal(null);
+    void executeDeleteLinks([id]);
   };
 
   const handleRequestDeletePageLinks = (ids: string[]) => {
     if (ids.length === 0) return;
-    if (instantDelete) {
-      void executeDeleteLinks(ids);
-      return;
-    }
-    setModal({ type: 'confirm-delete-page-links', ids, count: ids.length });
-  };
-
-  const handleConfirmDeletePageLinks = async () => {
-    if (modal?.type !== 'confirm-delete-page-links') return;
-    await executeDeleteLinks(modal.ids);
-    setModal(null);
+    void executeDeleteLinks(ids);
   };
 
   const handleEditLink = async (url: string, title: string) => {
-    if (modal?.type !== 'edit-link' || !isValidUrl(url)) return;
+    const normalizedUrl = normalizeUrl(url);
+    if (modal?.type !== 'edit-link' || !isValidUrl(normalizedUrl)) return;
     await updateLink(modal.link.id, {
-      url,
+      url: normalizedUrl,
       title,
-      faviconUrl: getFaviconUrl(url),
+      faviconUrl: getFaviconUrl(normalizedUrl),
     });
     setModal(null);
     await refreshAll();
@@ -346,6 +401,35 @@ export function App() {
     setPlayingLink(link);
   }, []);
 
+  const handleShuffleChange = useCallback(
+    (enabled: boolean) => {
+      if (enabled) {
+        if (playingLink) {
+          const rest = youtubePlaylist.filter((l) => l.id !== playingLink.id);
+          setShuffledPlaylist([playingLink, ...shuffleArray(rest)]);
+        } else {
+          setShuffledPlaylist(shuffleArray(youtubePlaylist));
+        }
+        setIsShuffled(true);
+      } else {
+        setIsShuffled(false);
+      }
+    },
+    [playingLink, youtubePlaylist],
+  );
+
+  const handlePlayAll = useCallback(() => {
+    if (isShuffled) {
+      const shuffled = shuffleArray(youtubePlaylist);
+      setShuffledPlaylist(shuffled);
+      const first = shuffled[0];
+      if (first) handlePlayVideo(first);
+    } else {
+      const first = youtubePlaylist[0];
+      if (first) handlePlayVideo(first);
+    }
+  }, [isShuffled, youtubePlaylist, handlePlayVideo]);
+
   const handleClosePlayer = useCallback(() => {
     setPlayingLink(null);
   }, []);
@@ -391,8 +475,87 @@ export function App() {
   return (
     <div className="app app--tree-layout">
       <header className="app-header">
-        <h1 className="app-header__logo">LinkPortal</h1>
-        <ThemeToggle theme={theme} onToggle={cycleTheme} />
+        <button
+          type="button"
+          className="app-header__logo"
+          onClick={() => void handleGoHome()}
+          aria-label="홈으로 이동"
+          title="홈으로 이동"
+        >
+          링크함
+        </button>
+        {searchOpen && (
+          <input
+            className="app-header__search"
+            type="search"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="전체 링크 검색"
+            autoFocus
+          />
+        )}
+        <div className="app-header__actions">
+          <button
+            type="button"
+            className="btn-icon"
+            onClick={() => {
+              setSearchOpen((v) => {
+                if (v) clearSearch();
+                return !v;
+              });
+            }}
+            aria-label="전체 검색"
+            title="전체 검색"
+          >
+            🔍
+          </button>
+          <button
+            type="button"
+            className="btn-icon"
+            onClick={handleExport}
+            aria-label="백업 내보내기"
+            title="백업 내보내기"
+          >
+            ⬇
+          </button>
+          <button
+            type="button"
+            className="btn-icon"
+            onClick={() => fileInputRef.current?.click()}
+            aria-label="백업 가져오기"
+            title="백업 가져오기"
+          >
+            ⬆
+          </button>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="application/json,.json"
+            onChange={handleImportFile}
+            style={{ display: 'none' }}
+          />
+          <ThemeToggle theme={theme} onToggle={cycleTheme} />
+        </div>
+        {searchOpen && results.length > 0 && (
+          <ul className="global-search-results">
+            {results.map((r) => (
+              <li key={r.link.id}>
+                <button
+                  type="button"
+                  className="global-search-results__item"
+                  onClick={() => {
+                    void selectCategoryById(r.link.categoryId);
+                    clearSearch();
+                    setSearchOpen(false);
+                  }}
+                >
+                  <span className="global-search-results__title">{r.link.title}</span>
+                  <span className="global-search-results__path">{r.folderPath}</span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
       </header>
 
       <LinkDropZone enabled onDropLinks={handleDropImport} className="link-drop-zone--app">
@@ -423,8 +586,12 @@ export function App() {
                 onEditLink={(link) => setModal({ type: 'edit-link', link })}
                 onMoveLink={(link) => setModal({ type: 'move-link', link })}
                 onPlayVideo={handlePlayVideo}
-                instantDelete={instantDelete}
-                onInstantDeleteChange={setInstantDelete}
+                embeddableCount={youtubePlaylist.length}
+                onPlayAll={handlePlayAll}
+                autoAdvance={autoAdvance}
+                onAutoAdvanceChange={setAutoAdvance}
+                isShuffled={isShuffled}
+                onShuffleChange={handleShuffleChange}
               />
             ) : (
               <EmptyDropPanel message={emptyMainMessage} />
@@ -436,9 +603,10 @@ export function App() {
       {playingLink && (
         <YouTubePlayer
           link={playingLink}
-          playlist={youtubePlaylist}
+          playlist={activePlaylist}
           onClose={handleClosePlayer}
           onPlayLink={handlePlayVideo}
+          autoAdvance={autoAdvance}
         />
       )}
 
@@ -496,23 +664,6 @@ export function App() {
           onClose={() => setModal(null)}
         />
       )}
-      {modal?.type === 'confirm-delete-link' && (
-        <ConfirmModal
-          title="링크 삭제"
-          message={`"${modal.title}" 링크를 삭제할까요?`}
-          onConfirm={handleConfirmDeleteLink}
-          onClose={() => setModal(null)}
-        />
-      )}
-      {modal?.type === 'confirm-delete-page-links' && (
-        <ConfirmModal
-          title="현재 페이지 삭제"
-          message={`현재 페이지의 ${modal.count}개 링크를 모두 삭제할까요? 되돌릴 수 없습니다.`}
-          onConfirm={handleConfirmDeletePageLinks}
-          onClose={() => setModal(null)}
-        />
-      )}
-
       <Toast toast={toast} />
     </div>
   );

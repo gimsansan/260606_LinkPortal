@@ -1,9 +1,9 @@
 import { useState, useEffect, useCallback } from 'react';
 
-export type Theme = 'dark' | 'light' | 'neon' | 'crimson';
+export type Theme = 'dark' | 'light' | 'neon';
 
 const THEME_KEY = 'linkportal-theme';
-const THEME_ORDER: Theme[] = ['dark', 'light', 'neon', 'crimson'];
+const THEME_ORDER: Theme[] = ['dark', 'light', 'neon'];
 const VALID_THEMES = new Set<string>(THEME_ORDER);
 
 function getStoredTheme(): Theme {

@@ -13,7 +13,7 @@
 .yt-player {
   position: relative;
   width: 100%;
-  max-width: 900px;
+  max-width: min(900px, calc(100vw - 2rem));
   background: #1a1a2e;
   border-radius: 12px;
   overflow: hidden;
@@ -45,6 +45,12 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  cursor: grab;
+  user-select: none;
+}
+
+.yt-player__title:active {
+  cursor: grabbing;
 }
 
 .yt-player__wrapper {

@@ -22,8 +22,12 @@ interface LinkCardListProps {
   onMoveLink?: (link: LinkItem) => void;
   onPlayVideo?: (link: LinkItem) => void;
   onBack?: () => void;
-  instantDelete?: boolean;
-  onInstantDeleteChange?: (enabled: boolean) => void;
+  embeddableCount?: number;
+  onPlayAll?: () => void;
+  autoAdvance?: boolean;
+  onAutoAdvanceChange?: (enabled: boolean) => void;
+  isShuffled?: boolean;
+  onShuffleChange?: (enabled: boolean) => void;
 }
 
 interface MarqueeRect {
@@ -64,8 +68,12 @@ export function LinkCardList({
   onEditLink,
   onMoveLink,
   onPlayVideo,
-  instantDelete = false,
-  onInstantDeleteChange,
+  embeddableCount = 0,
+  onPlayAll,
+  autoAdvance = false,
+  onAutoAdvanceChange,
+  isShuffled = false,
+  onShuffleChange,
 }: LinkCardListProps) {
   const [sortKey, setSortKey] = useState<SortKey>('newest');
   const [query, setQuery] = useState('');
@@ -121,6 +129,10 @@ export function LinkCardList({
   if (selectedIds.size > 0) {
     countLabel = `${selectedIds.size}개 선택 · ${filteredLinks.length}개 항목`;
   }
+
+  useEffect(() => {
+    setQuery('');
+  }, [categoryTitle]);
 
   useEffect(() => {
     setPage(0);
@@ -259,9 +271,26 @@ export function LinkCardList({
           <span className="link-list__spacer" />
         )}
         <h2 className="link-list__title">{categoryTitle}</h2>
-        <button type="button" className="btn-icon" onClick={onAddLink} aria-label="링크 추가">
-          +
-        </button>
+        <div className="link-list__header-actions">
+          {embeddableCount > 0 && onPlayAll && (
+            <button
+              type="button"
+              className="link-list__play-all"
+              onClick={onPlayAll}
+              aria-label="전체 재생"
+              title={
+                isShuffled
+                  ? '폴더 YouTube 링크를 랜덤 순서로 재생'
+                  : '폴더 YouTube 링크를 최근 추가순으로 재생 · 페이지·이름순과 무관'
+              }
+            >
+              ▶ 전체 재생
+            </button>
+          )}
+          <button type="button" className="btn-icon" onClick={onAddLink} aria-label="링크 추가">
+            +
+          </button>
+        </div>
       </header>
 
       {links.length === 0 ? (
@@ -283,17 +312,37 @@ export function LinkCardList({
               aria-label="링크 검색"
             />
             <div className="link-list__toolbar-actions">
-              {onInstantDeleteChange && (
-                <label className="link-list__instant-delete" title="켜면 확인 없이 바로 삭제">
-                  <span className="link-list__instant-delete-label">바로 삭제</span>
+              {onShuffleChange && embeddableCount > 0 && (
+                <label
+                  className="link-list__shuffle"
+                  title="켜면 전체·다음 재생 순서를 랜덤으로 · 끄면 최근 추가순"
+                >
+                  <span className="link-list__shuffle-label">랜덤 재생</span>
                   <input
                     type="checkbox"
-                    className="link-list__instant-delete-input"
-                    checked={instantDelete}
-                    onChange={(e) => onInstantDeleteChange(e.target.checked)}
+                    className="link-list__shuffle-input"
+                    checked={isShuffled}
+                    onChange={(e) => onShuffleChange(e.target.checked)}
                   />
-                  <span className="link-list__instant-delete-track" aria-hidden="true">
-                    <span className="link-list__instant-delete-thumb" />
+                  <span className="link-list__shuffle-track" aria-hidden="true">
+                    <span className="link-list__shuffle-thumb" />
+                  </span>
+                </label>
+              )}
+              {onAutoAdvanceChange && (
+                <label
+                  className="link-list__auto-advance"
+                  title="켜면 영상 종료 후 다음 곡 자동 재생 (브라우저 정책으로 음소거될 수 있음)"
+                >
+                  <span className="link-list__auto-advance-label">자동 넘김</span>
+                  <input
+                    type="checkbox"
+                    className="link-list__auto-advance-input"
+                    checked={autoAdvance}
+                    onChange={(e) => onAutoAdvanceChange(e.target.checked)}
+                  />
+                  <span className="link-list__auto-advance-track" aria-hidden="true">
+                    <span className="link-list__auto-advance-thumb" />
                   </span>
                 </label>
               )}

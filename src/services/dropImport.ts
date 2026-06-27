@@ -1,4 +1,4 @@
-import { isValidUrl } from './url';
+import { isValidUrl, normalizeUrl } from './url';
 import { parseUrlFileContent } from './urlFile';
 
 export interface DropLinkItem {
@@ -14,9 +14,10 @@ export async function extractLinksFromDataTransfer(
   const seen = new Set<string>();
 
   const push = (url: string, title?: string) => {
-    if (!isValidUrl(url) || seen.has(url)) return;
-    seen.add(url);
-    items.push({ url, title: title?.trim() || undefined });
+    const normalizedUrl = normalizeUrl(url);
+    if (!isValidUrl(normalizedUrl) || seen.has(normalizedUrl)) return;
+    seen.add(normalizedUrl);
+    items.push({ url: normalizedUrl, title: title?.trim() || undefined });
   };
 
   const files = dataTransfer.files;
@@ -43,7 +44,7 @@ export async function extractLinksFromDataTransfer(
   if (items.length > 0) return items;
 
   const plain = dataTransfer.getData('text/plain').trim();
-  if (plain && isValidUrl(plain)) {
+  if (plain && isValidUrl(normalizeUrl(plain))) {
     push(plain);
   }
 

@@ -9,8 +9,8 @@ export default defineConfig({
       registerType: 'autoUpdate',
       includeAssets: ['favicon.png', 'favicon-32.png', 'apple-touch-icon.png'],
       manifest: {
-        name: 'LinkPortal Launcher',
-        short_name: 'LinkPortal',
+        name: '링크함',
+        short_name: '링크함',
         description: 'URL 바로가기 컬렉션 런처',
         theme_color: '#1a1a2e',
         background_color: '#1a1a2e',
